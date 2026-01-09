@@ -6,7 +6,7 @@ from PySide6.QtGui import QAction, QIcon
 from PySide6.QtCore import QPointF, Qt
 from core.settings_manager import SettingsManager
 from core.graph import Graph
-from core.node import Node
+from core.node import Node, Link
 from core.assembler import ContextAssembler
 from core.logging_setup import setup_logging
 import logging
@@ -72,6 +72,11 @@ class AntiGravityWindow(QMainWindow):
         load_action.setShortcut("Ctrl+O")
         load_action.triggered.connect(self.load_graph)
         file_menu.addAction(load_action)
+        
+        merge_action = QAction("Merge Graph...", self)
+        merge_action.setShortcut("Ctrl+Shift+O")
+        merge_action.triggered.connect(self.merge_graph)
+        file_menu.addAction(merge_action)
         
         file_menu.addSeparator()
         
@@ -689,6 +694,28 @@ class AntiGravityWindow(QMainWindow):
         except Exception as e:
             self.logger.error(f"Load failed: {e}")
             QMessageBox.critical(self, "Load Error", str(e))
+
+    def merge_graph(self):
+        path, _ = QFileDialog.getOpenFileName(self, "Merge Graph", "", "JSON Files (*.json)")
+        if not path: return
+        try:
+            import os
+            filename = os.path.splitext(os.path.basename(path))[0]
+            self.logger.info(f"Merging graph from {path}")
+            
+            with open(path, 'r') as f:
+                data = json.load(f)
+            
+            self.graph.merge_graph(data, filename)
+            
+            # Since merge_graph updates the internal graph state, we just need to sync UI
+            self.refresh_visuals()
+            
+            self.logger.info("Merge successful")
+            self.statusBar().showMessage(f"Merged {path}", 3000)
+        except Exception as e:
+            self.logger.error(f"Merge failed: {e}")
+            QMessageBox.critical(self, "Merge Error", str(e))
 
     def open_settings(self):
         self.logger.info("Opening Settings Dialog")

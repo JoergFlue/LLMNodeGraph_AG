@@ -114,6 +114,75 @@ class Graph:
                 return False
         return True
 
+    def merge_graph(self, data: dict, filename: str):
+        """Merge another graph into the current one, handling ID and name collisions."""
+        import uuid
+        import re
+        
+        id_map = {}
+        new_nodes: List[Node] = []
+        
+        # 1. Process Nodes
+        for node_data in data.get("nodes", []):
+            original_id = node_data.get("id")
+            node = Node.from_dict(node_data)
+            
+            # ID Collision Handling
+            if node.id in self.nodes:
+                new_id = str(uuid.uuid4())
+                id_map[original_id] = new_id
+                node.id = new_id
+            else:
+                id_map[original_id] = node.id
+            
+            # Name Collision Handling
+            if node.name and not self.is_name_unique(node.name):
+                base_name = node.name
+                # Rule: handle collisions by appending "_[filename]"
+                suggested_name = f"{base_name}_{filename}"
+                
+                # If name already reaches character length limit or still collides
+                if len(suggested_name) > 32 or not self.is_name_unique(suggested_name):
+                    # Use "_####" schema for the last 5 characters
+                    # If name already ends with _####, we increment it.
+                    match = re.search(r'_(\d{4})$', base_name)
+                    if match:
+                        prefix = base_name[:-5]
+                        idx = int(match.group(1))
+                    else:
+                        # Truncate to fit _####
+                        prefix = base_name[:27]
+                        idx = 0
+                    
+                    while True:
+                        idx += 1
+                        test_name = f"{prefix}_{idx:04d}"
+                        if self.is_name_unique(test_name):
+                            node.name = test_name
+                            break
+                else:
+                    node.name = suggested_name
+            
+            new_nodes.append(node)
+            
+        # 2. Add Nodes to Graph (Temporarily hold to avoid partial links)
+        for node in new_nodes:
+            # We must clear input_links before adding, then rebuild them from remapped links
+            node.input_links = []
+            self.add_node(node)
+            
+        # 3. Process Links
+        for link_data in data.get("links", []):
+            old_source = link_data.get("source")
+            old_target = link_data.get("target")
+            
+            new_source = id_map.get(old_source)
+            new_target = id_map.get(old_target)
+            
+            if new_source and new_target:
+                # add_link handles input_links list and dirty marking
+                self.add_link(new_source, new_target)
+
     def to_dict(self):
         return {
             "version": "2.0",
