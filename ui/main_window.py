@@ -154,8 +154,25 @@ class AntiGravityWindow(QMainWindow):
             QMainWindow { background-color: #1e1e1e; color: #e0e0e0; }
             QMenuBar { background-color: #2b2b2b; color: #eee; }
             QMenuBar::item:selected { background-color: #444; }
-            QMenu { background-color: #2b2b2b; border: 1px solid #444; }
-            QMenu::item:selected { background-color: #444; }
+            QMenu { 
+                background-color: #2b2b2b; 
+                border: 1px solid #444; 
+                padding: 4px;
+            }
+            QMenu::item {
+                padding: 6px 10px 6px 10px;
+                border: 1px solid transparent;
+            }
+            QMenu::item:selected { 
+                background-color: #3e3e3e; 
+                border: 1px solid #00aaff;
+                border-radius: 3px;
+            }
+            QMenu::separator {
+                height: 1px;
+                background: #444;
+                margin: 4px 8px;
+            }
         """)
 
     def add_node_at(self, pos: QPointF):

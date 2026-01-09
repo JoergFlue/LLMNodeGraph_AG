@@ -15,6 +15,8 @@ Unlike traditional linear chat interfaces, AntiGravity lets you:
 - Manage token budgets per node
 - Work with multiple LLM providers (Ollama, OpenAI, Google Gemini)
 
+![AntiGravity Main Window](docs/Screenshot_2026-01-09.png)
+
 ## Key Features
 
 ### 🎯 Core Capabilities
