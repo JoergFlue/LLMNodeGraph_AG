@@ -23,7 +23,7 @@ class SettingsDialog(QDialog):
         layout_general = QFormLayout()
         
         self.combo_provider = QComboBox()
-        self.combo_provider.addItems(["Ollama", "OpenAI", "Gemini"])
+        self.combo_provider.addItems(["Ollama", "OpenAI", "Gemini", "OpenRouter"])
         layout_general.addRow("Default Provider:", self.combo_provider)
         
         self.edit_token_limit = QLineEdit()
@@ -49,6 +49,9 @@ class SettingsDialog(QDialog):
         
         # -- Gemini Tab --
         self.tabs.addTab(self._create_gemini_tab(), "Gemini")
+
+        # -- OpenRouter Tab --
+        self.tabs.addTab(self._create_openrouter_tab(), "OpenRouter")
         
         layout.addWidget(self.tabs)
         
@@ -171,6 +174,41 @@ class SettingsDialog(QDialog):
         widget.setLayout(layout)
         return widget
 
+    def _create_openrouter_tab(self):
+        widget = QWidget()
+        layout = QVBoxLayout()
+        form = QFormLayout()
+        
+        self.edit_openrouter_key = QLineEdit()
+        self.edit_openrouter_key.setEchoMode(QLineEdit.Password)
+        
+        self.combo_openrouter_model = QComboBox()
+        self.combo_openrouter_model.setEditable(True)
+        self.combo_openrouter_model.setPlaceholderText("Select or type model...")
+        self.combo_openrouter_model.currentTextChanged.connect(self._update_openrouter_btn_state)
+        
+        btn_refresh = QToolButton()
+        btn_refresh.setText("⟳")
+        btn_refresh.setToolTip("Fetch Models")
+        btn_refresh.clicked.connect(self.fetch_openrouter_models)
+        
+        h_model = QHBoxLayout()
+        h_model.addWidget(self.combo_openrouter_model)
+        h_model.addWidget(btn_refresh)
+        
+        form.addRow("API Key:", self.edit_openrouter_key)
+        form.addRow("Default Model:", h_model)
+        layout.addLayout(form)
+        
+        self.btn_test_openrouter = QPushButton("No valid connection")
+        self.btn_test_openrouter.setEnabled(False)
+        self.btn_test_openrouter.clicked.connect(self.test_openrouter)
+        layout.addWidget(self.btn_test_openrouter)
+        layout.addStretch()
+
+        widget.setLayout(layout)
+        return widget
+
     # --- Loading & Saving ---
     def load_settings(self):
         self.combo_provider.setCurrentText(self.settings.value("default_provider", "Ollama"))
@@ -189,11 +227,16 @@ class SettingsDialog(QDialog):
         # Gemini
         self.edit_gemini_key.setText(self.settings.value("gemini_key", ""))
         self.combo_gemini_model.setEditText(self.settings.value("gemini_model", ""))
+
+        # OpenRouter
+        self.edit_openrouter_key.setText(self.settings.value("openrouter_key", ""))
+        self.combo_openrouter_model.setEditText(self.settings.value("openrouter_model", ""))
         
         # Check if we can enable buttons based on loaded settings
         self._update_ollama_btn_state()
         self._update_openai_btn_state()
         self._update_gemini_btn_state()
+        self._update_openrouter_btn_state()
 
     def save_to_disk(self):
         self.settings.setValue("default_provider", self.combo_provider.currentText())
@@ -209,6 +252,9 @@ class SettingsDialog(QDialog):
         
         self.settings.setValue("gemini_key", self.edit_gemini_key.text())
         self.settings.setValue("gemini_model", self.combo_gemini_model.currentText())
+
+        self.settings.setValue("openrouter_key", self.edit_openrouter_key.text())
+        self.settings.setValue("openrouter_model", self.combo_openrouter_model.currentText())
         
         self.settings.sync()
 
@@ -243,6 +289,14 @@ class SettingsDialog(QDialog):
         else:
             self.btn_test_gemini.setEnabled(False)
             self.btn_test_gemini.setText("No valid connection")
+
+    def _update_openrouter_btn_state(self):
+        if self.combo_openrouter_model.currentText().strip() and self.edit_openrouter_key.text().strip():
+            self.btn_test_openrouter.setEnabled(True)
+            self.btn_test_openrouter.setText("Test Connection (OpenRouter)")
+        else:
+            self.btn_test_openrouter.setEnabled(False)
+            self.btn_test_openrouter.setText("No valid connection")
 
 
     # --- Fetching Logic ---
@@ -314,6 +368,33 @@ class SettingsDialog(QDialog):
         except Exception as e:
              QMessageBox.critical(self, "Error", f"Fetch failed: {e}")
 
+    def fetch_openrouter_models(self):
+        key = self.edit_openrouter_key.text()
+        if not key:
+            QMessageBox.warning(self, "Missing Key", "Enter API Key first.")
+            return
+
+        try:
+            url = "https://openrouter.ai/api/v1/models"
+            headers = {"Authorization": f"Bearer {key}"}
+            resp = requests.get(url, headers=headers, timeout=10)
+            
+            if resp.status_code == 200:
+                data = resp.json()
+                # data['data'] is a list of objects with 'id'
+                models = [m['id'] for m in data.get('data', [])]
+                models.sort()
+                
+                current = self.combo_openrouter_model.currentText()
+                self.combo_openrouter_model.clear()
+                self.combo_openrouter_model.addItems(models)
+                self.combo_openrouter_model.setEditText(current)
+                QMessageBox.information(self, "Success", f"Fetched {len(models)} models.")
+            else:
+                 QMessageBox.warning(self, "Error", f"Status {resp.status_code}")
+        except Exception as e:
+             QMessageBox.critical(self, "Error", f"Fetch failed: {e}")
+
     # --- Test Functions (Simple Reachability + Model check?) ---
     def test_ollama(self):
         self.fetch_ollama_models() # Reuse fetch as connection test implies ability to fetch
@@ -328,3 +409,6 @@ class SettingsDialog(QDialog):
 
     def test_gemini(self):
         self.fetch_gemini_models()
+
+    def test_openrouter(self):
+        self.fetch_openrouter_models()

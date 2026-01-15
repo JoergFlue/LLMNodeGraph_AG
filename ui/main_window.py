@@ -21,7 +21,10 @@ from core.command import (
 from .canvas import CanvasScene, CanvasView
 from .node_item import NodeItem
 from .wire_item import WireItem
+from .node_item import NodeItem
+from .wire_item import WireItem
 from .settings_dialog import SettingsDialog
+from .node_settings_dialog import NodeSettingsDialog
 from .log_window import LogWindow
 
 class AntiGravityWindow(QMainWindow):
@@ -373,6 +376,7 @@ class AntiGravityWindow(QMainWindow):
         
         config = {
             "model": node.config.model,
+            "provider": node.config.provider,
             "max_tokens": node.config.max_tokens,
             "trace_depth": node.config.trace_depth
         }

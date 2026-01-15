@@ -25,20 +25,27 @@ class LLMWorker(QThread):
         self.logger.info(f"Starting request for Node {self.node_id}")
         try:
             # Determine effective model
-            # For now, we trust the node config, but we could allow an override or "auto"
             model = self.config.get("model", "")
+            provider = self.config.get("provider", "Default")
             
-            # If model is empty or generic, we could fallback to default provider
-            # But usually node has a specific model set at creation.
-            
-            # Provider routing
-            if model.startswith("gpt") or model.startswith("o1"):
-                 self._call_openai()
-            elif model.startswith("gemini"):
-                 self._call_gemini()
+            # Explicit Provider Override
+            if provider == "OpenAI":
+                self._call_openai()
+            elif provider == "Gemini":
+                self._call_gemini()
+            elif provider == "OpenRouter":
+                self._call_openrouter()
+            elif provider == "Ollama":
+                self._call_ollama()
             else:
-                 # Default to Ollama for everything else (llama3, mistral, etc.)
-                 self._call_ollama()
+                # Fallback to heuristic (Default)
+                if model.startswith("gpt") or model.startswith("o1"):
+                     self._call_openai()
+                elif model.startswith("gemini"):
+                     self._call_gemini()
+                else:
+                     # Default to Ollama for everything else
+                     self._call_ollama()
                 
         except Exception as e:
             self.logger.error(f"Node {self.node_id} failed: {e}")
@@ -137,3 +144,36 @@ class LLMWorker(QThread):
                 
         except requests.RequestException as e:
              raise Exception(f"Gemini API failed: {e}")
+
+    def _call_openrouter(self):
+        api_key = self.settings.value("openrouter_key")
+        if not api_key:
+            raise Exception("OpenRouter API Key not configured in Settings")
+            
+        # Default fallback if not specified
+        model = self.config.get("model", self.settings.value("openrouter_model", "openai/gpt-3.5-turbo"))
+        
+        url = "https://openrouter.ai/api/v1/chat/completions"
+        
+        headers = {
+            "Authorization": f"Bearer {api_key}",
+            "HTTP-Referer": "https://github.com/JoergFlue/LLMNodeGraph_AG", # Optional good practice
+            "X-Title": "AntiGravity", # Optional good practice
+            "Content-Type": "application/json"
+        }
+        
+        payload = {
+            "model": model,
+            "messages": [{"role": "user", "content": self.prompt}],
+        }
+        
+        try:
+            response = requests.post(url, headers=headers, json=payload, timeout=120)
+            response.raise_for_status()
+            data = response.json()
+            # OpenRouter response structure mirrors OpenAI
+            result = data['choices'][0]['message']['content']
+            self.logger.info(f"OpenRouter response received ({len(result)} chars)")
+            self.finished.emit(self.node_id, result)
+        except requests.RequestException as e:
+             raise Exception(f"OpenRouter API failed: {e}")

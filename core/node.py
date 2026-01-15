@@ -6,6 +6,7 @@ from typing import List, Optional, Dict
 @dataclass
 class NodeConfig:
     model: str = "gpt-4o"
+    provider: str = "Default"  # Default, Ollama, OpenAI, Gemini
     max_tokens: int = 16000
     trace_depth: int = 2
 
@@ -48,6 +49,7 @@ class Node:
             "text_heights": [self.prompt_height, self.output_height],
             "config": {
                 "model": self.config.model,
+                "provider": self.config.provider,
                 "max_tokens": self.config.max_tokens,
                 "trace_depth": self.config.trace_depth
             },
@@ -80,6 +82,7 @@ class Node:
         conf = data.get("config", {})
         node.config = NodeConfig(
             model=conf.get("model", "gpt-4o"),
+            provider=conf.get("provider", "Default"),
             max_tokens=conf.get("max_tokens", 16000),
             trace_depth=conf.get("trace_depth", 2)
         )

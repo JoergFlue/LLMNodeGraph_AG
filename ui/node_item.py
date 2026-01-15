@@ -1,10 +1,12 @@
 
 from PySide6.QtWidgets import QGraphicsObject, QGraphicsProxyWidget, QTextEdit, QPushButton, QGraphicsItem, QLineEdit
 from PySide6.QtCore import QRectF, Qt, Signal, QPointF, QRegularExpression
-from PySide6.QtGui import QPainter, QColor, QPen, QBrush, QPainterPath, QFont, QRegularExpressionValidator
+from PySide6.QtGui import QPainter, QColor, QPen, QBrush, QPainterPath, QFont, QRegularExpressionValidator, QFontMetrics
 
 from core.node import Node
 from core.graph import Graph
+from core.settings_manager import SettingsManager
+from .node_settings_dialog import NodeSettingsDialog
 
 class NodeItem(QGraphicsObject):
     # Signals
@@ -25,12 +27,12 @@ class NodeItem(QGraphicsObject):
     
     # Resize constants
     RESIZE_HANDLE_SIZE = 12
-    MIN_WIDTH = 200
+    MIN_WIDTH = 250 # Initial base, but will be dynamic
     MAX_WIDTH = 800
     MIN_HEIGHT = 300
     MAX_HEIGHT = 1200
-    MIN_PROMPT_HEIGHT = 60
-    MIN_OUTPUT_HEIGHT = 60
+    MIN_PROMPT_HEIGHT = 60 # approx 3 lines
+    MIN_OUTPUT_HEIGHT = 60 # approx 3 lines
 
     def __init__(self, node: Node, graph: Graph):
         super().__init__()
@@ -40,8 +42,8 @@ class NodeItem(QGraphicsObject):
         self.setAcceptHoverEvents(True)
         
         # Read size from node
-        self.width = node.width
-        self.height = node.height
+        self.width = max(self.node.width, self.MIN_WIDTH)
+        self.height = max(self.node.height, self.MIN_HEIGHT)
         self.setPos(node.pos_x, node.pos_y)
         
         # Resize state
@@ -188,7 +190,6 @@ class NodeItem(QGraphicsObject):
                         self.hide()
                         if self.parent_item.scene() and self.parent_item.scene().views():
                             self.parent_item.scene().views()[0].setFocus()
-                        # We don't emit finished if we reset to old_text to avoid redundant command
                     else:
                         # Continue editing
                         self.setFocus()
@@ -239,37 +240,66 @@ class NodeItem(QGraphicsObject):
         display_name = self.node.name or "Unnamed Node"
         self.setToolTip(f"Node: {display_name}")
 
+    def get_min_width(self):
+        """Calculate minimum width based on footer content."""
+        # Footer contains: [Margin] [Run Button] [Gap] [Context Payload] [Gap] [Tokens] [Margin]
+        # Run Button: 80px
+        # Margin: 15px
+        # Gap: 20px
+        
+        # Estimates for text:
+        # Context Payload: approx 150-180px including label and meter
+        # Tokens: approx 80px
+        
+        # Run(80) + Gap(15) + Payload(160) + Gap(15) + Tokens(70) + Margin(15) * 2 = ~370
+        return 380
+
     def update_layout(self):
         """Update widget positions and sizes based on current node dimensions."""
-        # Calculate available space
-        header_height = 60
-        footer_height = 50
+        # Constrain width
+        min_w = self.get_min_width()
+        if self.width < min_w:
+            self.width = min_w
+            
+        header_height = 75
+        footer_height = 50 
         margin = 15
-        available_height = self.height - header_height - footer_height
+        gap = 10
         
-        # Use stored heights or distribute proportionally
-        prompt_h = self.node.prompt_height
-        output_h = self.node.output_height
+        # Available vertical space for text fields
+        available_text_height = self.height - header_height - footer_height - margin
         
-        # Ensure they fit within available space
-        total_text_height = prompt_h + output_h + 20  # 20px gap
-        if total_text_height > available_height:
-            # Scale down proportionally
-            scale = available_height / total_text_height
-            prompt_h = int(prompt_h * scale)
-            output_h = int(output_h * scale)
+        # Enforce minimums for prompt and output
+        # If available < min_prompt + min_output, resize node height
+        min_total_text = self.MIN_PROMPT_HEIGHT + self.MIN_OUTPUT_HEIGHT + gap
+        if available_text_height < min_total_text:
+            self.height = header_height + footer_height + margin + min_total_text
+            available_text_height = min_total_text
+            
+        # 1. Prompt
+        # Use stored prompt height, constrained
+        prompt_h = max(self.MIN_PROMPT_HEIGHT, self.node.prompt_height)
+        
+        # If prompt takes too much space, cap it so output has at least min height
+        max_prompt_h = available_text_height - self.MIN_OUTPUT_HEIGHT - gap
+        if prompt_h > max_prompt_h:
+            prompt_h = max_prompt_h
+            
+        # 2. Output
+        # Takes all remaining space
+        output_h = available_text_height - prompt_h - gap
         
         # Position prompt editor
         self.proxy_prompt.setPos(margin, header_height)
         self.proxy_prompt.resize(self.width - 2 * margin, prompt_h)
         
         # Position output editor
-        output_y = header_height + prompt_h + 10
+        output_y = header_height + prompt_h + gap
         self.proxy_output.setPos(margin, output_y)
         self.proxy_output.resize(self.width - 2 * margin, output_h)
         
-        # Position run button
-        btn_y = self.height - footer_height + 10
+        # Position run button (Footer Left)
+        btn_y = self.height - footer_height + 10 # 10px padding within footer
         self.proxy_btn.setPos(margin, btn_y)
         self.proxy_btn.resize(80, 30)
 
@@ -309,7 +339,6 @@ class NodeItem(QGraphicsObject):
             self.name_edit.setStyleSheet("QLineEdit { background-color: #1a4d7a; color: white; border: 1px solid #00aaff; font-family: 'Segoe UI'; font-size: 13px; font-weight: bold; }")
 
     def on_name_edit_finished(self, new_name):
-        # Validation already handled in NameEdit.complete_editing
         self.nameEditFinished.emit(self.node.id, self.node.name, new_name)
         self.set_name_tooltip()
         self.update()
@@ -333,7 +362,8 @@ class NodeItem(QGraphicsObject):
     
     def get_separator_rect(self):
         """Get the rectangle for the text field separator."""
-        separator_y = 60 + self.node.prompt_height + 5
+        separator_y = 75 + self.node.prompt_height # Header + Prompt
+        # Add half of gap (gap is 10)
         return QRectF(15, separator_y, self.width - 30, 10)
     
     def get_cursor_for_position(self, pos):
@@ -344,26 +374,49 @@ class NodeItem(QGraphicsObject):
             return Qt.SizeVerCursor
         return Qt.ArrowCursor
 
+    def get_model_label_rect(self):
+        font = QFont("Segoe UI", 9)
+        metrics = QFontMetrics(font)
+        
+        model_text = self.resolve_provider_model_text()
+
+        w = metrics.horizontalAdvance(model_text)
+        h = metrics.height()
+        return QRectF(15, 38, self.width - 30, h)
+
+    # --- Helpers ---
+    def resolve_provider_model_text(self):
+        config_provider = self.node.config.provider or "Default"
+        config_model = self.node.config.model or ""
+        
+        display_provider = config_provider
+        display_model = config_model
+        
+        if config_provider == "Default":
+            settings = SettingsManager()
+            if not config_model:
+                display_provider = settings.value("default_provider", "Ollama")
+                if display_provider == "OpenAI":
+                    display_model = settings.value("openai_model", "gpt-4o")
+                elif display_provider == "Gemini":
+                    display_model = settings.value("gemini_model", "gemini-1.5-flash")
+                else:
+                    display_model = settings.value("ollama_model", "llama3")
+            else:
+                if config_model.startswith("gpt") or config_model.startswith("o1"):
+                    display_provider = "OpenAI"
+                elif config_model.startswith("gemini"):
+                    display_provider = "Gemini"
+                else:
+                    display_provider = "Ollama"
+                display_model = config_model
+        
+        return f"{display_provider}/{display_model}" if display_model else display_provider
+
     # --- Metrics ---
     def calculate_context_usage(self):
-        """Estimate token usage: History + Inputs + Prompt"""
-        # 1. Prompt
         prompt_len = len(self.node.prompt)
-        
-        # 2. Inputs (Shallow check for this node's direct context scope)
-        # Note: True context is recursive (history), but for UI we estimate roughly
-        # or we should try to simulate the assembler.
-        # Simulating assembler is safer if we want accuracy, but let's do sum of inputs for speed.
-        inputs_len = 0
-        
-        # Find input nodes
-        # We need access to graph or search items. 
-        # Since NodeItem doesn't hold Graph ref directly (only Node), we might need to rely
-        # on MainWindow to push this? Or we can traverse if we had links.
-        # But Node has input_links (IDs). We don't have the node objects.
-        # actually self.node is independent.
-        # Workaround: MainWindow calls 'update_metrics' 
-        return prompt_len # Placeholder if standalone
+        return prompt_len 
         
     def set_metrics(self, payload_val, max_val):
         self._payload_chars = payload_val
@@ -375,19 +428,14 @@ class NodeItem(QGraphicsObject):
         painter.setRenderHint(QPainter.Antialiasing)
         
         # --- 1. Background & Selection Highlight ---
-        # Selection border (Primary focus)
         if self.isSelected():
-            # Glowing Blue Border for Selection
             painter.setPen(QPen(QColor("#00aaff"), 3))
             painter.setBrush(Qt.NoBrush)
             painter.drawRoundedRect(rect, 8, 8)
         
-        # Now draw the main node background
         if self.node.is_dirty:
-            # Dashed yellow border if dirty
             painter.setPen(QPen(QColor("#e6c60d"), 2, Qt.DashLine))
         else:
-            # Standard border
             painter.setPen(QPen(QColor("#444"), 1))
             
         painter.setBrush(QBrush(QColor("#2b2b2b")))
@@ -405,7 +453,7 @@ class NodeItem(QGraphicsObject):
         
         # Highlight header if active/selected
         if self.isSelected():
-            header_color = QColor("#1a4d7a") # Deeper blue for selected header
+            header_color = QColor("#1a4d7a") 
         else:
             header_color = QColor("#4d4418") if self.node.is_dirty else QColor("#383838")
             
@@ -426,74 +474,92 @@ class NodeItem(QGraphicsObject):
         metrics = painter.fontMetrics()
         elided_name = metrics.elidedText(display_name, Qt.ElideRight, header_text_width)
         
-        # Draw the name if not editing
         if not self.proxy_name.isVisible():
             painter.drawText(38, 24, elided_name)
         
-        # 3. Labels
-        painter.setPen(QPen(QColor("#888")))
-        painter.setFont(QFont("Segoe UI", 8))
-        painter.drawText(15, 52, f"Trace Depth: {self.node.config.trace_depth} (Auto)")
-        
-        # Model (Moved down to the right of Trace Depth)
+        # 3. Header Info Labels
         painter.setPen(QPen(QColor("#aaa")))
         painter.setFont(QFont("Segoe UI", 9))
-        model_text = self.node.config.model or "Default"
+        
+        model_text = self.resolve_provider_model_text()
         metrics_model = painter.fontMetrics()
-        model_w = metrics_model.horizontalAdvance(model_text)
-        painter.drawText(self.width - model_w - 15, 52, model_text)
+        text_width = self.width - 30
+        elided_model = metrics_model.elidedText(model_text, Qt.ElideRight, text_width)
+        
+        painter.drawText(15, 50, elided_model)
 
         painter.setPen(QPen(QColor("#888")))
         painter.setFont(QFont("Segoe UI", 8))
-        painter.drawText(15, 192, "Output (Cached):")
+        painter.drawText(15, 68, f"Trace Depth: {self.node.config.trace_depth} (Auto)")
+
+        # 4. Footer Metrics (New Layout)
+        footer_top = self.height - 50
         
-        # 4. Context Meter
-        # Use stored metrics
+        # 4.a Context Payload Meter
+        # Logic: Run btn is 80px + 15 margin = 95px end.
+        # Start payload at x = 110
         current = getattr(self, '_payload_chars', 0)
-        limit = getattr(self, '_max_chars', 16000 * 4) # Default 16k tokens -> 64k chars
+        limit = getattr(self, '_max_chars', 16000 * 4) 
         
         ratio = min(current / max(limit, 1), 1.0)
         
+        meter_x = 110
+        meter_y = footer_top + 10
+        meter_width = 120
+        meter_height = 8
+        
+        # Background
         painter.setBrush(QBrush(QColor("#222")))
         painter.setPen(Qt.NoPen)
-        painter.drawRoundedRect(120, 375, 165, 8, 4, 4)
+        painter.drawRoundedRect(meter_x, meter_y, meter_width, meter_height, 4, 4)
         
-        # Color based on usage
+        # Fill
         meter_color = QColor("#2d8a4e")
         if ratio > 0.8: meter_color = QColor("#e6c60d")
         if ratio > 0.95: meter_color = QColor("#d32f2f")
         
-        fill_width = int(165 * ratio)
+        fill_width = int(meter_width * ratio)
         if fill_width > 0:
             painter.setBrush(QBrush(meter_color))
-            painter.drawRoundedRect(120, 375, fill_width, 8, 4, 4)
-        
+            painter.drawRoundedRect(meter_x, meter_y, fill_width, meter_height, 4, 4)
+            
+        # Label above meter
         painter.setPen(QPen(QColor("#666")))
-        painter.drawText(120, 370, "Context Payload:")
+        painter.setFont(QFont("Segoe UI", 8))
+        painter.drawText(meter_x, meter_y - 3, "Context Payload")
         
-        # Convert chars to tokens usually /4
+        # Numbers below meter
         tok_curr = current // 4
         tok_limit = limit // 4
-        
-        # Format k
         def fmt_k(v): return f"{v/1000:.1f}k" if v > 1000 else str(v)
+        payload_text = f"{fmt_k(tok_curr)} / {fmt_k(tok_limit)}"
         
-        painter.drawText(220, 370, f"{fmt_k(tok_curr)} / {fmt_k(tok_limit)}")
+        painter.setPen(QPen(QColor("#888")))
+        painter.setFont(QFont("Segoe UI", 8))
+        painter.drawText(meter_x, meter_y + 18, payload_text)
         
-        # 5. Output Tokens
+        # 4.b Tokens
+        # Right of payload
+        tokens_x = meter_x + meter_width + 20
+        
         out_len = len(self.node.cached_output or "") if self.node.cached_output else 0
         est_tokens = out_len // 4
-        painter.setPen(QPen(QColor("#aaa")))
-        painter.setFont(QFont("Segoe UI", 9))
-        painter.drawText(200, 420, f"Tokens: {est_tokens}")
+        
+        painter.setPen(QPen(QColor("#666")))
+        painter.setFont(QFont("Segoe UI", 8))
+        painter.drawText(tokens_x, meter_y - 3, "Output Tokens")
+        
+        painter.setPen(QPen(QColor("#888")))
+        painter.setFont(QFont("Segoe UI", 8))
+        painter.drawText(tokens_x, meter_y + 18, f"{est_tokens}")
 
-        # 6. Ports
-        out_port_y = 60
+        # 5. Ports
+        out_port_y = 60 + 15
         painter.setBrush(QBrush(QColor("#777")))
         painter.setPen(QPen(QColor("#333")))
         painter.drawRect(self.width - 8, out_port_y, 8, 16)
         
-        y_offset = 60
+        y_offset = 75
         for _ in self.node.input_links:
             painter.setBrush(QBrush(QColor("#fff"))) 
             painter.drawRect(0, y_offset, 8, 16)
@@ -504,11 +570,10 @@ class NodeItem(QGraphicsObject):
         painter.setFont(QFont("Arial", 10, QFont.Bold))
         painter.drawText(-12, y_offset + 12, "+")
         
-        # 7. Resize Handle
+        # 6. Resize Handle
         handle_rect = self.get_resize_handle_rect()
         painter.setPen(QPen(QColor("#666"), 1))
         painter.setBrush(Qt.NoBrush)
-        # Draw grip lines
         for i in range(3):
             offset = i * 4
             painter.drawLine(
@@ -519,11 +584,9 @@ class NodeItem(QGraphicsObject):
             )
 
     def contextMenuEvent(self, event):
-        from PySide6.QtWidgets import QMenu
+        from PySide6.QtWidgets import QMenu, QApplication
         from PySide6.QtGui import QAction
         
-        # We need to reach the MainWindow for some actions, or emit signals
-        # For simplicity, let's look for the scene's views[0].window()
         view = self.scene().views()[0]
         window = view.window()
         
@@ -561,15 +624,20 @@ class NodeItem(QGraphicsObject):
             super().mouseDoubleClickEvent(event)
 
     def hoverMoveEvent(self, event):
-        """Update cursor based on hover position."""
-        cursor = self.get_cursor_for_position(event.pos())
-        self.setCursor(cursor)
+        pos = event.pos()
+        if self.get_resize_handle_rect().contains(pos):
+            self.setCursor(Qt.SizeFDiagCursor)
+        elif self.get_separator_rect().contains(pos):
+            self.setCursor(Qt.SizeVerCursor)
+        elif self.get_model_label_rect().contains(pos):
+            self.setCursor(Qt.PointingHandCursor)
+        else:
+            self.setCursor(Qt.ArrowCursor)
         super().hoverMoveEvent(event)
     
     def mousePressEvent(self, event):
         pos = event.pos()
         
-        # Check for resize handle
         if self.get_resize_handle_rect().contains(pos):
             self.is_resizing = True
             self.resize_start_pos = event.pos()
@@ -577,18 +645,32 @@ class NodeItem(QGraphicsObject):
             event.accept()
             return
         
-        # Store start position for undo
         self.move_start_scene_pos = self.scenePos()
         
-        # Check for separator resize
         if self.get_separator_rect().contains(pos):
             self.is_resizing_separator = True
             self.resize_start_pos = event.pos()
-            self.resize_start_heights = (self.node.prompt_height, self.node.output_height)
+            # store start height of prompt
+            self.resize_start_heights = (self.node.prompt_height, 0) 
+            event.accept()
+            return
+
+        if self.get_model_label_rect().contains(pos):
+            current_provider = self.node.config.provider or "Default"
+            current_model = self.node.config.model or ""
+            
+            view = self.scene().views()[0] if self.scene() and self.scene().views() else None
+            
+            dlg = NodeSettingsDialog(current_provider, current_model, parent=view)
+            if dlg.exec():
+                self.node.config.provider = dlg.selected_provider
+                self.node.config.model = dlg.selected_model
+                self.node.is_dirty = True
+                self.update() 
+            
             event.accept()
             return
         
-        # Hit detection for Output Port
         out_port_rect = QRectF(self.width - 25, 45, 40, 40)
         if out_port_rect.contains(pos):
             self.is_wiring = True
@@ -602,31 +684,44 @@ class NodeItem(QGraphicsObject):
 
     def mouseMoveEvent(self, event):
         if self.is_resizing:
-            # Corner resize
             delta = event.pos() - self.resize_start_pos
-            new_width = max(self.MIN_WIDTH, min(self.MAX_WIDTH, self.resize_start_size[0] + delta.x()))
+            min_w = self.get_min_width()
+            new_width = max(min_w, min(self.MAX_WIDTH, self.resize_start_size[0] + delta.x()))
             new_height = max(self.MIN_HEIGHT, min(self.MAX_HEIGHT, self.resize_start_size[1] + delta.y()))
             
             self.width = new_width
             self.height = new_height
             self.update_layout()
             
-            # Notify that position/size changed (for wire updates)
             self.positionChanged.emit(self.node.id)
             event.accept()
             return
         
         if self.is_resizing_separator:
-            # Separator resize
             delta_y = event.pos().y() - self.resize_start_pos.y()
-            new_prompt_h = max(self.MIN_PROMPT_HEIGHT, self.resize_start_heights[0] + delta_y)
-            new_output_h = max(self.MIN_OUTPUT_HEIGHT, self.resize_start_heights[1] - delta_y)
+            # Resizing separator changes prompt height
+            # But must ensure prompt_height >= min
+            # AND output_height >= min 
             
-            # Ensure both meet minimums
-            if new_prompt_h >= self.MIN_PROMPT_HEIGHT and new_output_h >= self.MIN_OUTPUT_HEIGHT:
-                self.node.prompt_height = int(new_prompt_h)
-                self.node.output_height = int(new_output_h)
-                self.update_layout()
+            new_prompt_h = self.resize_start_heights[0] + delta_y
+            
+            # Check Constraints
+            header_height = 75
+            footer_height = 50
+            margin = 15
+            gap = 10
+            
+            available_text_height = self.height - header_height - footer_height - margin
+            
+            # 1. Min Prompt
+            new_prompt_h = max(self.MIN_PROMPT_HEIGHT, new_prompt_h)
+            
+            # 2. Min Output (Prompt can't grow so big that output < min)
+            max_prompt_h = available_text_height - self.MIN_OUTPUT_HEIGHT - gap
+            new_prompt_h = min(new_prompt_h, max_prompt_h)
+            
+            self.node.prompt_height = int(new_prompt_h)
+            self.update_layout()
             
             event.accept()
             return
@@ -666,13 +761,12 @@ class NodeItem(QGraphicsObject):
             if old_pos != new_pos:
                 self.moveFinished.emit(self.node.id, old_pos, new_pos)
             
-            # Force full scene redraw to clear any drag artifacts
             if self.scene():
                 self.scene().update()
 
     def check_input_drop(self, scene_pos: QPointF) -> bool:
         local_pos = self.mapFromScene(scene_pos)
-        y_offset = 60 + len(self.node.input_links) * 24
+        y_offset = 75 + len(self.node.input_links) * 24
         placeholder_rect = QRectF(-25, y_offset - 10, 50, 40)
         return placeholder_rect.contains(local_pos)
 
