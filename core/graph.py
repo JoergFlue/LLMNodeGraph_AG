@@ -47,7 +47,7 @@ class Graph:
         for l_id in links_to_remove:
             self.remove_link(l_id)
 
-    def add_link(self, source_id: str, target_id: str) -> Link:
+    def add_link(self, source_id: str, target_id: str, trigger_dirty: bool = True) -> Link:
         # Check for cycles or duplicate links if needed (omitted for MVP speed, but good to have)
         link = Link(source_id=source_id, target_id=target_id)
         self.links[link.id] = link
@@ -55,7 +55,8 @@ class Graph:
         if target_id in self.nodes:
             self.nodes[target_id].input_links.append(link.id)
             # Mark target as dirty because its inputs changed
-            self.mark_dirty(target_id)
+            if trigger_dirty:
+                self.mark_dirty(target_id)
             
         return link
 
@@ -115,17 +116,47 @@ class Graph:
         return True
 
     def merge_graph(self, data: dict, filename: str):
-        """Merge another graph into the current one, handling ID and name collisions."""
+        """Merge another graph into the current one, handling ID and name collisions.
+        
+        Merged nodes are positioned below and left-aligned with existing nodes.
+        """
         import uuid
         import re
         
         id_map = {}
         new_nodes: List[Node] = []
         
+        # --- Calculate Positioning Offset ---
+        offset_x = 0.0
+        offset_y = 0.0
+        
+        if self.nodes:
+            # 1. Bounds of Current Graph
+            current_min_x = min(n.pos_x for n in self.nodes.values())
+            current_max_y = max(n.pos_y + n.height for n in self.nodes.values())
+            
+            # 2. Bounds of Incoming Graph
+            incoming_nodes_data = data.get("nodes", [])
+            if incoming_nodes_data:
+                # Need to parse positions first or do it on fly. 
+                # Let's peek at them. Default to 0,0 if missing.
+                incoming_min_x = min(n.get("pos", [0, 0])[0] for n in incoming_nodes_data)
+                incoming_min_y = min(n.get("pos", [0, 0])[1] for n in incoming_nodes_data)
+                
+                # 3. Calculate Offset
+                # Goal: Left align (match min_x) and place below (max_y + padding)
+                PADDING = 50.0
+                offset_x = current_min_x - incoming_min_x
+                offset_y = current_max_y + PADDING - incoming_min_y
+        
         # 1. Process Nodes
         for node_data in data.get("nodes", []):
             original_id = node_data.get("id")
             node = Node.from_dict(node_data)
+            
+            # Apply Position Offset
+            node.pos_x += offset_x
+            node.pos_y += offset_y
             
             # ID Collision Handling
             if node.id in self.nodes:
@@ -181,7 +212,8 @@ class Graph:
             
             if new_source and new_target:
                 # add_link handles input_links list and dirty marking
-                self.add_link(new_source, new_target)
+                # Suppress dirty marking on merge as per user request
+                self.add_link(new_source, new_target, trigger_dirty=False)
 
     def to_dict(self):
         return {
@@ -193,30 +225,102 @@ class Graph:
 
     @classmethod
     def from_dict(cls, data):
+        """Load a graph from dictionary data with ID collision detection and validation.
+        
+        If duplicate node or link IDs are detected, they will be automatically remapped
+        to new UUIDs and warnings will be logged.
+        """
+        import uuid
+        import logging
+        
+        logger = logging.getLogger("Graph")
         graph = cls()
         graph.global_token_limit = data.get("app_settings", {}).get("global_token_limit", 16384)
         
+        # Track ID mappings for collision detection
+        node_id_map = {}  # Maps original_id -> final_id
+        seen_node_ids = set()
+        
+        # Process nodes with collision detection
         for node_data in data.get("nodes", []):
             node = Node.from_dict(node_data)
-            graph.add_node(node)
+            original_id = node.id
             
-        # For MVP, assume links are stored in the top-level 'links' list for simplicity
-        # If we need to support the exact nested structure from the spec example later, we can adapt.
+            # Check for node ID collision
+            if node.id in seen_node_ids:
+                new_id = str(uuid.uuid4())
+                logger.warning(
+                    f"ID collision detected for node '{node.id}'. "
+                    f"Remapping to new ID '{new_id}'. "
+                    f"This may indicate a corrupted or manually edited file."
+                )
+                node.id = new_id
+                node_id_map[original_id] = new_id
+            else:
+                seen_node_ids.add(node.id)
+                node_id_map[original_id] = node.id
+            
+            # Clear input_links - they will be rebuilt from links
+            node.input_links = []
+            graph.add_node(node)
+        
+        # Track link IDs for collision detection
+        seen_link_ids = set()
+        link_id_map = {}  # Maps original_link_id -> final_link_id
+        
+        # Process links with collision detection and node ID remapping
         for link_data in data.get("links", []):
-            l = Link(
-                id=link_data.get("id"),
-                source_id=link_data.get("source"),
-                target_id=link_data.get("target")
-            )
-            # Re-generate UUID if missing
-            if not l.id:
-                import uuid
-                l.id = str(uuid.uuid4())
+            original_link_id = link_data.get("id")
+            original_source = link_data.get("source")
+            original_target = link_data.get("target")
+            
+            # Remap node IDs if they were changed due to collisions
+            remapped_source = node_id_map.get(original_source, original_source)
+            remapped_target = node_id_map.get(original_target, original_target)
+            
+            # Validate that both nodes exist
+            if remapped_source not in graph.nodes:
+                logger.warning(
+                    f"Link references non-existent source node '{original_source}'. Skipping link."
+                )
+                continue
                 
+            if remapped_target not in graph.nodes:
+                logger.warning(
+                    f"Link references non-existent target node '{original_target}'. Skipping link."
+                )
+                continue
+            
+            # Create link with remapped node IDs
+            l = Link(
+                id=original_link_id,
+                source_id=remapped_source,
+                target_id=remapped_target
+            )
+            
+            # Generate UUID if missing
+            if not l.id:
+                l.id = str(uuid.uuid4())
+                logger.info(f"Generated missing link ID: {l.id}")
+            
+            # Check for link ID collision
+            if l.id in seen_link_ids:
+                new_link_id = str(uuid.uuid4())
+                logger.warning(
+                    f"Link ID collision detected for '{l.id}'. "
+                    f"Remapping to new ID '{new_link_id}'."
+                )
+                link_id_map[l.id] = new_link_id
+                l.id = new_link_id
+            else:
+                seen_link_ids.add(l.id)
+                link_id_map[l.id] = l.id
+            
             graph.links[l.id] = l
-            # Ensure the node knows about this link (redundancy check vs serialized state)
+            
+            # Update node's input_links list
             if l.target_id in graph.nodes:
                 if l.id not in graph.nodes[l.target_id].input_links:
-                     graph.nodes[l.target_id].input_links.append(l.id)
+                    graph.nodes[l.target_id].input_links.append(l.id)
 
         return graph

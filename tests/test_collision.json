@@ -1,0 +1,101 @@
+{
+    "version": "2.0",
+    "app_settings": {
+        "global_token_limit": 16384
+    },
+    "nodes": [
+        {
+            "id": "duplicate-id-1",
+            "type": "LLM_Node",
+            "pos": [
+                100,
+                100
+            ],
+            "size": [
+                300,
+                450
+            ],
+            "text_heights": [
+                100,
+                160
+            ],
+            "config": {
+                "model": "gpt-4o",
+                "provider": "Default",
+                "max_tokens": 16000,
+                "trace_depth": 2
+            },
+            "prompt": "First node with duplicate ID",
+            "cached_output": "",
+            "is_dirty": false,
+            "name": "Node_0001",
+            "inputs": []
+        },
+        {
+            "id": "duplicate-id-1",
+            "type": "LLM_Node",
+            "pos": [
+                500,
+                100
+            ],
+            "size": [
+                300,
+                450
+            ],
+            "text_heights": [
+                100,
+                160
+            ],
+            "config": {
+                "model": "gpt-4o",
+                "provider": "Default",
+                "max_tokens": 16000,
+                "trace_depth": 2
+            },
+            "prompt": "Second node with SAME duplicate ID - should be remapped",
+            "cached_output": "",
+            "is_dirty": false,
+            "name": "Node_0002",
+            "inputs": []
+        },
+        {
+            "id": "unique-id-3",
+            "type": "LLM_Node",
+            "pos": [
+                300,
+                400
+            ],
+            "size": [
+                300,
+                450
+            ],
+            "text_heights": [
+                100,
+                160
+            ],
+            "config": {
+                "model": "gpt-4o",
+                "provider": "Default",
+                "max_tokens": 16000,
+                "trace_depth": 2
+            },
+            "prompt": "Third node with unique ID",
+            "cached_output": "",
+            "is_dirty": false,
+            "name": "Node_0003",
+            "inputs": []
+        }
+    ],
+    "links": [
+        {
+            "id": "link-1",
+            "source": "duplicate-id-1",
+            "target": "unique-id-3"
+        },
+        {
+            "id": "link-1",
+            "source": "duplicate-id-1",
+            "target": "unique-id-3"
+        }
+    ]
+}
