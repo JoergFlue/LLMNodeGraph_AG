@@ -100,7 +100,7 @@ class NodeItem(QGraphicsObject):
         self.output_edit = QTextEdit()
         self.output_edit.setReadOnly(True)
         self.output_edit.setPlaceholderText("Output (Cached): Waiting for run...")
-        self.output_edit.setPlainText(node.cached_output or "")
+        self.output_edit.setMarkdown(node.cached_output or "")
         self.output_edit.setStyleSheet("""
             QTextEdit {
                 background-color: #151515; 
@@ -345,7 +345,7 @@ class NodeItem(QGraphicsObject):
         
     def update_output(self, text: str):
         self.node.cached_output = text
-        self.output_edit.setPlainText(text)
+        self.output_edit.setMarkdown(text)
         self.update() # Redraw for token/status updates
 
     def boundingRect(self):
