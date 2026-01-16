@@ -50,6 +50,7 @@ class AntiGravityWindow(QMainWindow):
         self.temp_wire: Optional[WireItem] = None
         self.dragging_source_id: Optional[str] = None
         self.clipboard = [] # List of node dicts for copy/paste
+        self.current_file_path: Optional[str] = None
         
         # Undo/Redo System
         self.command_manager = CommandManager()
@@ -66,15 +67,29 @@ class AntiGravityWindow(QMainWindow):
         # File Menu
         file_menu = menubar.addMenu("File")
         
+        new_action = QAction("New", self)
+        new_action.setShortcut("Ctrl+Alt+N")
+        new_action.triggered.connect(self.new_graph)
+        file_menu.addAction(new_action)
+        
+        load_action = QAction("Open...", self)
+        load_action.setShortcut("Ctrl+O")
+        load_action.triggered.connect(self.load_graph)
+        file_menu.addAction(load_action)
+        
+        file_menu.addSeparator()
+        
         save_action = QAction("Save", self)
         save_action.setShortcut("Ctrl+S")
         save_action.triggered.connect(self.save_graph)
         file_menu.addAction(save_action)
         
-        load_action = QAction("Load", self)
-        load_action.setShortcut("Ctrl+O")
-        load_action.triggered.connect(self.load_graph)
-        file_menu.addAction(load_action)
+        save_as_action = QAction("Save As...", self)
+        save_as_action.setShortcut("Ctrl+Shift+S")
+        save_as_action.triggered.connect(self.save_graph_as)
+        file_menu.addAction(save_as_action)
+        
+        file_menu.addSeparator()
         
         merge_action = QAction("Merge Graph...", self)
         merge_action.setShortcut("Ctrl+Shift+O")
@@ -177,6 +192,12 @@ class AntiGravityWindow(QMainWindow):
                 margin: 4px 8px;
             }
         """)
+        self.update_window_title()
+
+    def update_window_title(self):
+        import os
+        filename = os.path.basename(self.current_file_path) if self.current_file_path else "Untitled"
+        self.setWindowTitle(f"{filename} - AntiGravity")
 
     def add_node_at(self, pos: QPointF):
         self.logger.info(f"Adding node at {pos.x()}, {pos.y()}")
@@ -674,16 +695,45 @@ class AntiGravityWindow(QMainWindow):
             self.refresh_visuals()
 
     # --- Persistence ---
+    def new_graph(self):
+        # TODO: Check for unsaved changes
+        self.logger.info("Creating new graph")
+        self.graph = Graph()
+        self.scene.clear()
+        self.node_items.clear()
+        self.wires.clear()
+        self.temp_wire = None
+        self.current_file_path = None
+        self.command_manager.clear() # Clear undo history for new graph
+        self.update_window_title()
+        self.refresh_visuals()
+
     def save_graph(self):
+        if not self.current_file_path:
+            self.save_graph_as()
+        else:
+            self._save_to_path(self.current_file_path)
+
+    def save_graph_as(self):
         path, _ = QFileDialog.getSaveFileName(self, "Save Graph", "", "JSON Files (*.json)")
         if not path: return
+        
+        # Ensure .json extension
+        if not path.endswith(".json"):
+            path += ".json"
+            
+        self.current_file_path = path
+        self._save_to_path(path)
+        self.update_window_title()
+
+    def _save_to_path(self, path):
         try:
             self.logger.info(f"Saving graph to {path}")
             data = self.graph.to_dict()
             with open(path, 'w') as f:
                 json.dump(data, f, indent=2)
-            print(f"Saved to {path}")
             self.logger.info("Save successful")
+            self.statusBar().showMessage(f"Saved to {path}", 3000)
         except Exception as e:
             self.logger.error(f"Save failed: {e}")
             QMessageBox.critical(self, "Save Error", str(e))
@@ -701,6 +751,8 @@ class AntiGravityWindow(QMainWindow):
             self.node_items.clear()
             self.wires.clear()
             self.temp_wire = None
+            self.current_file_path = path
+            self.command_manager.clear() # Clear undo history for newly loaded graph
             
             # Rebuild UI
             for node in self.graph.nodes.values():
@@ -710,8 +762,9 @@ class AntiGravityWindow(QMainWindow):
                 self.create_visual_wire(link)
                 
             self.refresh_visuals()
-            print(f"Loaded from {path}")
+            self.update_window_title()
             self.logger.info("Load successful")
+            self.statusBar().showMessage(f"Loaded {path}", 3000)
         except Exception as e:
             self.logger.error(f"Load failed: {e}")
             QMessageBox.critical(self, "Load Error", str(e))

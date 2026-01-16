@@ -82,6 +82,8 @@ class NodeItem(QGraphicsObject):
         self.prompt_edit = PromptEdit(self)
         self.prompt_edit.setPlaceholderText("System: Enter prompt here...")
         self.prompt_edit.setPlainText(node.prompt)
+        # Enable scroll wheel handling
+        self.prompt_edit.setAcceptDrops(True)
         self.prompt_edit.setStyleSheet("""
             QTextEdit {
                 background-color: #1e1e1e; 

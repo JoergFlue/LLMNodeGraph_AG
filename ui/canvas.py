@@ -1,5 +1,5 @@
 
-from PySide6.QtWidgets import QGraphicsScene, QGraphicsView
+from PySide6.QtWidgets import QGraphicsScene, QGraphicsView, QGraphicsProxyWidget
 from PySide6.QtCore import Qt, QRectF, QLineF
 from PySide6.QtGui import QPainter, QColor, QPen, QBrush
 
@@ -57,7 +57,18 @@ class CanvasView(QGraphicsView):
         # Let's use RubberBandDrag by default (Selection) and Ctrl+Drag or Middle Drag for Pan.
 
     def wheelEvent(self, event):
-        """Zoom with mouse wheel."""
+        """Zoom with mouse wheel, unless over a scrollable widget."""
+        # Check if we are over an item that might handle scrolling
+        item = self.itemAt(event.position().toPoint())
+        if item:
+            # If we hit a proxy widget (like QTextEdit), let it handle the event if it wants to
+            if isinstance(item, QGraphicsProxyWidget):
+                # Forward event to the scene/item first
+                super().wheelEvent(event)
+                if event.isAccepted():
+                    return
+
+        # Default behavior: Zoom
         zoom_in_factor = 1.15
         zoom_out_factor = 1 / zoom_in_factor
         
