@@ -1,6 +1,6 @@
 
 from PySide6.QtWidgets import QGraphicsObject, QGraphicsProxyWidget, QTextEdit, QPushButton, QGraphicsItem, QLineEdit
-from PySide6.QtCore import QRectF, Qt, Signal, QPointF, QRegularExpression
+from PySide6.QtCore import QRectF, Qt, Signal, QPointF, QRegularExpression, QTimer, QTime
 from PySide6.QtGui import QPainter, QColor, QPen, QBrush, QPainterPath, QFont, QRegularExpressionValidator, QFontMetrics
 
 from core.node import Node
@@ -8,10 +8,88 @@ from core.graph import Graph
 from core.settings_manager import SettingsManager
 from .node_settings_dialog import NodeSettingsDialog
 
+class StatusOverlayItem(QGraphicsItem):
+    def __init__(self, parent):
+        super().__init__(parent)
+        self.parent_item = parent
+        # Important: High Z-Value to draw on top of QGraphicsProxyWidgets (children of NodeItem)
+        self.setZValue(100)
+        self.setAcceptedMouseButtons(Qt.NoButton) 
+        
+    def boundingRect(self):
+        return self.parent_item.boundingRect()
+        
+    def paint(self, painter: QPainter, option, widget):
+        state = self.parent_item.execution_state
+        if state not in ["RUNNING", "QUEUED"]:
+            return
+            
+        width = self.parent_item.width
+        height = self.parent_item.height
+        
+        # Center of the node
+        cx = width / 2
+        cy = height / 2
+        
+        # Draw semi-transparent background for better visibility
+        bg_rect = QRectF(cx - 60, cy - 40, 120, 80)
+        painter.setBrush(QBrush(QColor(0, 0, 0, 180)))
+        painter.setPen(Qt.NoPen)
+        painter.drawRoundedRect(bg_rect, 10, 10)
+        
+        # Prepare Spinner
+        painter.save()
+        painter.translate(cx, cy - 10)
+        
+        spinner_angle = getattr(self.parent_item, 'spinner_angle', 0)
+        painter.rotate(spinner_angle)
+        
+        # Simple Circle Spinner
+        pen_width = 4
+        radius = 16
+        
+        # Track
+        painter.setPen(QPen(QColor("#444"), pen_width))
+        painter.setBrush(Qt.NoBrush)
+        painter.drawEllipse(-radius, -radius, radius * 2, radius * 2)
+        
+        # Active Arc
+        if state == "RUNNING":
+            arc_color = QColor("#00ff00")
+        else:
+            arc_color = QColor("#e6c60d") # Yellow for queued
+            
+        pen = QPen(arc_color, pen_width)
+        pen.setCapStyle(Qt.RoundCap)
+        painter.setPen(pen)
+        
+        # Draw a 90 degree arc
+        painter.drawArc(-radius, -radius, radius * 2, radius * 2, 0, 90 * 16)
+        
+        painter.restore()
+        
+        # Text Below
+        painter.setFont(QFont("Segoe UI", 10, QFont.Bold))
+        painter.setPen(QPen(QColor("#fff")))
+        
+        text_y = cy + 25
+        status_text = ""
+        if state == "RUNNING":
+            secs = self.parent_item.elapsed_ms / 1000.0
+            status_text = f"{secs:.1f}s"
+        else:
+            status_text = "Queued"
+            
+        # Center text
+        metrics = painter.fontMetrics()
+        tw = metrics.horizontalAdvance(status_text)
+        painter.drawText(cx - tw/2, text_y, status_text)
+
 class NodeItem(QGraphicsObject):
     # Signals
     promptChanged = Signal(str, str) # node_id, new_prompt
     runClicked = Signal(str) # node_id
+    cancelClicked = Signal(str) # node_id - NEW
     
     # Undo/Redo Support Signals
     moveFinished = Signal(str, QPointF, QPointF) # node_id, old_pos, new_pos
@@ -41,6 +119,15 @@ class NodeItem(QGraphicsObject):
         self.setFlags(QGraphicsItem.ItemIsMovable | QGraphicsItem.ItemIsSelectable | QGraphicsItem.ItemSendsGeometryChanges)
         self.setAcceptHoverEvents(True)
         
+        # Execution State
+        self.execution_state = "IDLE" # IDLE, QUEUED, RUNNING
+        self.run_timer = QTimer()
+        self.run_timer.timeout.connect(self.on_timer_tick)
+        self.run_start_time = None
+        self.elapsed_ms = 0
+        self.spinner_angle = 0
+
+        
         # Read size from node
         self.width = max(self.node.width, self.MIN_WIDTH)
         self.height = max(self.node.height, self.MIN_HEIGHT)
@@ -49,6 +136,9 @@ class NodeItem(QGraphicsObject):
         # Resize state
         self.is_resizing = False
         self.is_resizing_separator = False
+        
+        # Overlay
+        self.status_overlay = StatusOverlayItem(self)
         self.resize_start_pos = None
         self.resize_start_size = None
         self.resize_start_heights = None
@@ -75,7 +165,7 @@ class NodeItem(QGraphicsObject):
 
             def keyPressEvent(self, event):
                 if event.key() == Qt.Key_Return and (event.modifiers() & Qt.ControlModifier):
-                    self.parent_item.runClicked.emit(self.parent_item.node.id)
+                    self.parent_item.on_run_btn_clicked()
                     return
                 super().keyPressEvent(event)
 
@@ -131,7 +221,9 @@ class NodeItem(QGraphicsObject):
         """)
         self.proxy_btn = QGraphicsProxyWidget(self)
         self.proxy_btn.setWidget(self.run_btn)
-        self.run_btn.clicked.connect(lambda: self.runClicked.emit(self.node.id))
+        self.run_btn.clicked.connect(self.on_run_btn_clicked)
+        
+
         
         # 4. Name Editor (Header)
         class NameEdit(QLineEdit):
@@ -425,6 +517,74 @@ class NodeItem(QGraphicsObject):
         self._max_chars = max_val
         self.update()
 
+    def on_run_btn_clicked(self):
+        if self.execution_state == "IDLE":
+             self.runClicked.emit(self.node.id)
+        else:
+             self.cancelClicked.emit(self.node.id)
+
+    def set_execution_state(self, state):
+        self.execution_state = state
+        
+        # Styles
+        style_idle = """
+            QPushButton {
+                background-color: #2d5a37; 
+                color: white; 
+                border-radius: 4px; 
+                font-weight: bold;
+                border: none;
+            }
+            QPushButton:hover { background-color: #3d7a47; }
+            QPushButton:pressed { background-color: #1d3a27; }
+        """
+        style_cancel = """
+            QPushButton {
+                background-color: #7a2d2d; 
+                color: white; 
+                border-radius: 4px; 
+                font-weight: bold;
+                border: none;
+            }
+            QPushButton:hover { background-color: #8a3d3d; }
+            QPushButton:pressed { background-color: #5a1d1d; }
+        """
+        
+        if state == "RUNNING":
+            self.run_start_time = QTime.currentTime()
+            self.elapsed_ms = 0
+            self.run_timer.start(50) # Faster update for smooth spinner
+            self.run_btn.setText("CANCEL")
+            self.run_btn.setStyleSheet(style_cancel)
+            self.output_edit.setPlaceholderText("Running...")
+        elif state == "QUEUED":
+            self.run_timer.start(50) # Animate spinner even if queued (e.g. slow pulse or rotate)
+            self.elapsed_ms = 0
+            self.run_btn.setText("CANCEL") # allow cancel from queue
+            self.run_btn.setStyleSheet(style_cancel)
+            self.output_edit.setPlaceholderText("Queued...")
+        else: # IDLE
+            self.run_timer.stop()
+
+            self.run_btn.setText("RUN")
+            self.run_btn.setStyleSheet(style_idle)
+            # Placeholder updated by externally setting output or cleared
+            
+        self.update()
+        if hasattr(self, 'status_overlay'):
+             self.status_overlay.update()
+
+    def on_timer_tick(self):
+        if not hasattr(self, 'spinner_angle'):
+             self.spinner_angle = 0
+             
+        if self.execution_state == "RUNNING" or self.execution_state == "QUEUED":
+            self.spinner_angle = (self.spinner_angle + 30) % 360
+            if self.execution_state == "RUNNING" and self.run_start_time:
+                self.elapsed_ms = self.run_start_time.msecsTo(QTime.currentTime())
+            self.update() # trigger paint
+            self.status_overlay.update() # Update overlay specifically
+
     def paint(self, painter: QPainter, option, widget):
         rect = self.boundingRect()
         painter.setRenderHint(QPainter.Antialiasing)
@@ -540,6 +700,8 @@ class NodeItem(QGraphicsObject):
         painter.setFont(QFont("Segoe UI", 8))
         painter.drawText(meter_x, meter_y + 18, payload_text)
         
+        # 4.a1 Execution Status (Next to Run Button) - REMOVED (Moved to Center Overlay)
+
         # 4.b Tokens
         # Right of payload
         tokens_x = meter_x + meter_width + 20

@@ -7,7 +7,7 @@ import logging
 from pathlib import Path
 
 # Add parent directory to path to import core modules
-sys.path.insert(0, str(Path(__file__).parent))
+sys.path.insert(0, str(Path(__file__).parent.parent))
 
 # Setup basic logging
 logging.basicConfig(level=logging.WARNING, format='%(levelname)s - %(name)s - %(message)s')

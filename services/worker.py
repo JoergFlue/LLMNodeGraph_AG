@@ -19,10 +19,20 @@ class LLMWorker(QThread):
         self.config = config
         self.settings = SettingsManager()
         self.logger = logging.getLogger("LLM.Worker")
+        self.is_cancelled = False
+        self._start_time = 0
+
+    def cancel(self):
+        self.is_cancelled = True
         
     def run(self):
+        import time
+        self._start_time = time.time()
         self.started.emit()
         self.logger.info(f"Starting request for Node {self.node_id}")
+        
+        if self.is_cancelled: return
+        
         try:
             # Determine effective model
             model = self.config.get("model", "")
@@ -75,6 +85,7 @@ class LLMWorker(QThread):
             response.raise_for_status()
             data = response.json()
             result = data.get("response", "")
+            if self.is_cancelled: return
             self.logger.info(f"Ollama response received ({len(result)} chars)")
             self.finished.emit(self.node_id, result)
         except requests.RequestException as e:
@@ -109,6 +120,7 @@ class LLMWorker(QThread):
             response.raise_for_status()
             data = response.json()
             result = data['choices'][0]['message']['content']
+            if self.is_cancelled: return
             self.logger.info(f"OpenAI response received ({len(result)} chars)")
             self.finished.emit(self.node_id, result)
         except requests.RequestException as e:
@@ -136,6 +148,7 @@ class LLMWorker(QThread):
             data = response.json()
             try:
                 result = data['candidates'][0]['content']['parts'][0]['text']
+                if self.is_cancelled: return
                 self.logger.info(f"Gemini response received ({len(result)} chars)")
                 self.finished.emit(self.node_id, result)
             except (KeyError, IndexError):
@@ -173,6 +186,7 @@ class LLMWorker(QThread):
             data = response.json()
             # OpenRouter response structure mirrors OpenAI
             result = data['choices'][0]['message']['content']
+            if self.is_cancelled: return
             self.logger.info(f"OpenRouter response received ({len(result)} chars)")
             self.finished.emit(self.node_id, result)
         except requests.RequestException as e:
