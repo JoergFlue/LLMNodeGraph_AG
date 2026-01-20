@@ -2,11 +2,12 @@
 from PySide6.QtWidgets import QGraphicsScene, QGraphicsView, QGraphicsProxyWidget
 from PySide6.QtCore import Qt, QRectF, QLineF
 from PySide6.QtGui import QPainter, QColor, QPen, QBrush
+from .theme import Colors, Sizing
 
 class CanvasScene(QGraphicsScene):
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setBackgroundBrush(QBrush(QColor("#161616")))
+        self.setBackgroundBrush(QBrush(QColor(Colors.CANVAS_BG)))
         self.setSceneRect(-5000, -5000, 10000, 10000)
 
     def drawBackground(self, painter: QPainter, rect: QRectF):
@@ -16,8 +17,8 @@ class CanvasScene(QGraphicsScene):
         super().drawBackground(painter, rect)
         
         # Grid settings
-        grid_size = 40
-        grid_color = QColor("#333")
+        grid_size = Sizing.GRID_SIZE
+        grid_color = QColor(Colors.GRID_COLOR)
         grid_pen = QPen(grid_color)
         grid_pen.setWidth(1)
         
@@ -58,18 +59,22 @@ class CanvasView(QGraphicsView):
 
     def wheelEvent(self, event):
         """Zoom with mouse wheel, unless over a scrollable widget."""
-        # Check if we are over an item that might handle scrolling
-        item = self.itemAt(event.position().toPoint())
-        if item:
-            # If we hit a proxy widget (like QTextEdit), let it handle the event if it wants to
+        # Find all items at the current mouse position
+        items = self.items(event.position().toPoint())
+        
+        # Look for the topmost proxy widget (like QTextEdit) that might want the event
+        for item in items:
             if isinstance(item, QGraphicsProxyWidget):
-                # Forward event to the scene/item first
+                # Forward event to the scene/item
+                # super().wheelEvent(event) handles the standard forwarding logic
                 super().wheelEvent(event)
                 if event.isAccepted():
                     return
+                # If the proxy didn't accept it (no scrollbar etc), we continue or zoom
+                break 
 
         # Default behavior: Zoom
-        zoom_in_factor = 1.15
+        zoom_in_factor = Sizing.ZOOM_FACTOR
         zoom_out_factor = 1 / zoom_in_factor
         
         if event.angleDelta().y() > 0:

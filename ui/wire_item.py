@@ -2,6 +2,8 @@
 from PySide6.QtWidgets import QGraphicsPathItem
 from PySide6.QtGui import QPainterPath, QPen, QColor, QPainter
 from PySide6.QtCore import Qt, QPointF
+from .theme import Colors, Sizing
+
 
 class WireItem(QGraphicsPathItem):
     def __init__(self, source_pos: QPointF, target_pos: QPointF):
@@ -10,7 +12,7 @@ class WireItem(QGraphicsPathItem):
         self.target_pos = target_pos
         self.setZValue(-1) # Behind nodes
         
-        pen = QPen(QColor("#888"), 2)
+        pen = QPen(QColor(Colors.WIRE_DEFAULT), Sizing.WIRE_WIDTH)
         self.setPen(pen)
         self.update_path()
 
@@ -28,7 +30,7 @@ class WireItem(QGraphicsPathItem):
         # Bezier control points logic
         # Improve visual curve
         ctrl_dist = abs(dx) * 0.5 
-        ctrl_dist = max(ctrl_dist, 50)
+        ctrl_dist = max(ctrl_dist, Sizing.WIRE_CONTROL_DIST_MIN)
         
         ctrl1 = QPointF(self.source_pos.x() + ctrl_dist, self.source_pos.y())
         ctrl2 = QPointF(self.target_pos.x() - ctrl_dist, self.target_pos.y())

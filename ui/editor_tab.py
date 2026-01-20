@@ -292,11 +292,8 @@ class EditorTab(QWidget):
         node = self.graph.nodes.get(node_id)
         if node:
             node.cached_output = result
-            # We don't mark dirty for LLM output? 
-            # Original code: self.graph.mark_dirty(node_id) -> handled logic node state
-            # but usually output is transient or cached. If we save, we usually save output?
-            # Yes, Graph.to_dict saves cached_output. So this changes file content.
-            self.is_dirty = True 
+            node.is_dirty = False  # Clear dirty state after successful run
+            self.is_dirty = True  # Tab/Project is still dirty (content changed)
             
             # Update UI Widget
             self.node_items[node_id].update_output(result)
@@ -338,10 +335,10 @@ class EditorTab(QWidget):
         target_item = self.node_items.get(link.target_id)
         
         if source_item and target_item:
-            start_pos = source_item.mapToScene(source_item.width - 6, 66)
+            start_pos = source_item.mapToScene(source_item.width - Sizing.PORT_SIZE, Sizing.HEADER_HEIGHT)
             try:
                 idx = target_item.node.input_links.index(link_id)
-                y_offset = 60 + idx * 20 + 6
+                y_offset = Sizing.HEADER_HEIGHT + idx * 24
                 end_pos = target_item.mapToScene(0, y_offset)
                 wire.update_positions(start_pos, end_pos)
             except ValueError:
@@ -441,10 +438,10 @@ class EditorTab(QWidget):
         target_item = self.node_items.get(link.target_id)
         
         if source_item and target_item:
-            start_pos = source_item.mapToScene(source_item.width - 6, 66)
+            start_pos = source_item.mapToScene(source_item.width - Sizing.PORT_SIZE, Sizing.HEADER_HEIGHT)
             try:
                 idx = target_item.node.input_links.index(link.id)
-                y_offset = 60 + idx * 20 + 6
+                y_offset = Sizing.HEADER_HEIGHT + idx * 24
                 end_pos = target_item.mapToScene(0, y_offset)
                 wire = WireItem(start_pos, end_pos)
                 self.scene.addItem(wire)

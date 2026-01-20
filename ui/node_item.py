@@ -7,6 +7,7 @@ from core.node import Node
 from core.graph import Graph
 from core.settings_manager import SettingsManager
 from .node_settings_dialog import NodeSettingsDialog
+from .theme import Colors, Sizing, Spacing, Typography, Timing, Styles
 
 class StatusOverlayItem(QGraphicsItem):
     def __init__(self, parent):
@@ -14,7 +15,8 @@ class StatusOverlayItem(QGraphicsItem):
         self.parent_item = parent
         # Important: High Z-Value to draw on top of QGraphicsProxyWidgets (children of NodeItem)
         self.setZValue(100)
-        self.setAcceptedMouseButtons(Qt.NoButton) 
+        self.setAcceptedMouseButtons(Qt.NoButton)
+        self.setEnabled(False) # Don't catch events, let them pass through to children or parent node 
         
     def boundingRect(self):
         return self.parent_item.boundingRect()
@@ -32,8 +34,10 @@ class StatusOverlayItem(QGraphicsItem):
         cy = height / 2
         
         # Draw semi-transparent background for better visibility
-        bg_rect = QRectF(cx - 60, cy - 40, 120, 80)
-        painter.setBrush(QBrush(QColor(0, 0, 0, 180)))
+        overlay_w = Sizing.OVERLAY_WIDTH
+        overlay_h = Sizing.OVERLAY_HEIGHT
+        bg_rect = QRectF(cx - overlay_w/2, cy - overlay_h/2, overlay_w, overlay_h)
+        painter.setBrush(QBrush(QColor(Colors.OVERLAY_BG)))
         painter.setPen(Qt.NoPen)
         painter.drawRoundedRect(bg_rect, 10, 10)
         
@@ -45,19 +49,19 @@ class StatusOverlayItem(QGraphicsItem):
         painter.rotate(spinner_angle)
         
         # Simple Circle Spinner
-        pen_width = 4
-        radius = 16
+        pen_width = Sizing.SPINNER_WIDTH
+        radius = Sizing.SPINNER_RADIUS
         
         # Track
-        painter.setPen(QPen(QColor("#444"), pen_width))
+        painter.setPen(QPen(QColor(Colors.BORDER_DEFAULT), pen_width))
         painter.setBrush(Qt.NoBrush)
         painter.drawEllipse(-radius, -radius, radius * 2, radius * 2)
         
         # Active Arc
         if state == "RUNNING":
-            arc_color = QColor("#00ff00")
+            arc_color = QColor(Colors.RUNNING)
         else:
-            arc_color = QColor("#e6c60d") # Yellow for queued
+            arc_color = QColor(Colors.QUEUED) # Yellow/Dirty for queued
             
         pen = QPen(arc_color, pen_width)
         pen.setCapStyle(Qt.RoundCap)
@@ -69,8 +73,8 @@ class StatusOverlayItem(QGraphicsItem):
         painter.restore()
         
         # Text Below
-        painter.setFont(QFont("Segoe UI", 10, QFont.Bold))
-        painter.setPen(QPen(QColor("#fff")))
+        painter.setFont(QFont(Typography.FAMILY_PRIMARY, Typography.SIZE_NORMAL, QFont.Bold))
+        painter.setPen(QPen(QColor(Colors.TEXT_PRIMARY)))
         
         text_y = cy + 25
         status_text = ""
@@ -104,13 +108,13 @@ class NodeItem(QGraphicsObject):
     positionChanged = Signal(str)
     
     # Resize constants
-    RESIZE_HANDLE_SIZE = 12
-    MIN_WIDTH = 250 # Initial base, but will be dynamic
-    MAX_WIDTH = 800
-    MIN_HEIGHT = 300
-    MAX_HEIGHT = 1200
-    MIN_PROMPT_HEIGHT = 60 # approx 3 lines
-    MIN_OUTPUT_HEIGHT = 60 # approx 3 lines
+    RESIZE_HANDLE_SIZE = Sizing.RESIZE_HANDLE_SIZE
+    MIN_WIDTH = Sizing.NODE_MIN_WIDTH
+    MAX_WIDTH = Sizing.NODE_MAX_WIDTH
+    MIN_HEIGHT = Sizing.NODE_MIN_HEIGHT
+    MAX_HEIGHT = Sizing.NODE_MAX_HEIGHT
+    MIN_PROMPT_HEIGHT = Sizing.MIN_PROMPT_HEIGHT
+    MIN_OUTPUT_HEIGHT = Sizing.MIN_OUTPUT_HEIGHT
 
     def __init__(self, node: Node, graph: Graph):
         super().__init__()
@@ -139,6 +143,7 @@ class NodeItem(QGraphicsObject):
         
         # Overlay
         self.status_overlay = StatusOverlayItem(self)
+        self.status_overlay.hide() # Hidden by default until RUNNING or QUEUED
         self.resize_start_pos = None
         self.resize_start_size = None
         self.resize_start_heights = None
@@ -174,16 +179,7 @@ class NodeItem(QGraphicsObject):
         self.prompt_edit.setPlainText(node.prompt)
         # Enable scroll wheel handling
         self.prompt_edit.setAcceptDrops(True)
-        self.prompt_edit.setStyleSheet("""
-            QTextEdit {
-                background-color: #1e1e1e; 
-                color: #e0e0e0; 
-                border: 1px solid #444; 
-                border-radius: 4px;
-                font-family: 'Consolas', monospace;
-                font-size: 11px;
-            }
-        """)
+        self.prompt_edit.setStyleSheet(Styles.PROMPT_EDIT)
         self.proxy_prompt = QGraphicsProxyWidget(self)
         self.proxy_prompt.setWidget(self.prompt_edit)
         self.prompt_edit.textChanged.connect(self.on_text_changed)
@@ -193,32 +189,13 @@ class NodeItem(QGraphicsObject):
         self.output_edit.setReadOnly(True)
         self.output_edit.setPlaceholderText("Output (Cached): Waiting for run...")
         self.output_edit.setMarkdown(node.cached_output or "")
-        self.output_edit.setStyleSheet("""
-            QTextEdit {
-                background-color: #151515; 
-                color: #aaf; 
-                border: 1px solid #333; 
-                border-radius: 4px;
-                font-family: 'Consolas', monospace;
-                font-size: 11px;
-            }
-        """)
+        self.output_edit.setStyleSheet(Styles.OUTPUT_EDIT)
         self.proxy_output = QGraphicsProxyWidget(self)
         self.proxy_output.setWidget(self.output_edit)
         
         # 3. Run Button
         self.run_btn = QPushButton("RUN")
-        self.run_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #2d5a37; 
-                color: white; 
-                border-radius: 4px; 
-                font-weight: bold;
-                border: none;
-            }
-            QPushButton:hover { background-color: #3d7a47; }
-            QPushButton:pressed { background-color: #1d3a27; }
-        """)
+        self.run_btn.setStyleSheet(Styles.BUTTON_RUN)
         self.proxy_btn = QGraphicsProxyWidget(self)
         self.proxy_btn.setWidget(self.run_btn)
         self.run_btn.clicked.connect(self.on_run_btn_clicked)
@@ -306,18 +283,7 @@ class NodeItem(QGraphicsObject):
         validator = QRegularExpressionValidator(regex, self.name_edit)
         self.name_edit.setValidator(validator)
         
-        self.name_edit.setStyleSheet("""
-            QLineEdit {
-                background-color: #1a4d7a;
-                color: white;
-                border: 1px solid #00aaff;
-                border-radius: 2px;
-                font-family: 'Segoe UI';
-                font-size: 13px;
-                font-weight: bold;
-                padding: 0px 4px;
-            }
-        """)
+        self.name_edit.setStyleSheet(Styles.NAME_EDIT)
         self.proxy_name = QGraphicsProxyWidget(self)
         self.proxy_name.setWidget(self.name_edit)
         self.proxy_name.hide()
@@ -395,7 +361,7 @@ class NodeItem(QGraphicsObject):
         # Position run button (Footer Left)
         btn_y = self.height - footer_height + 10 # 10px padding within footer
         self.proxy_btn.setPos(margin, btn_y)
-        self.proxy_btn.resize(80, 30)
+        self.proxy_btn.resize(Sizing.BUTTON_WIDTH, Sizing.BUTTON_HEIGHT)
 
         # Position name edit
         self.proxy_name.setPos(38, 5)
@@ -428,9 +394,9 @@ class NodeItem(QGraphicsObject):
         is_duplicate = not self.graph.is_name_unique(text, exclude_node_id=self.node.id)
         
         if is_empty or is_duplicate:
-            self.name_edit.setStyleSheet("QLineEdit { background-color: #4a1a1a; color: white; border: 1px solid red; font-family: 'Segoe UI'; font-size: 13px; font-weight: bold; }")
+            self.name_edit.setStyleSheet(Styles.NAME_EDIT_ERROR)
         else:
-            self.name_edit.setStyleSheet("QLineEdit { background-color: #1a4d7a; color: white; border: 1px solid #00aaff; font-family: 'Segoe UI'; font-size: 13px; font-weight: bold; }")
+            self.name_edit.setStyleSheet(Styles.NAME_EDIT)
 
     def on_name_edit_finished(self, new_name):
         self.nameEditFinished.emit(self.node.id, self.node.name, new_name)
@@ -526,48 +492,27 @@ class NodeItem(QGraphicsObject):
     def set_execution_state(self, state):
         self.execution_state = state
         
-        # Styles
-        style_idle = """
-            QPushButton {
-                background-color: #2d5a37; 
-                color: white; 
-                border-radius: 4px; 
-                font-weight: bold;
-                border: none;
-            }
-            QPushButton:hover { background-color: #3d7a47; }
-            QPushButton:pressed { background-color: #1d3a27; }
-        """
-        style_cancel = """
-            QPushButton {
-                background-color: #7a2d2d; 
-                color: white; 
-                border-radius: 4px; 
-                font-weight: bold;
-                border: none;
-            }
-            QPushButton:hover { background-color: #8a3d3d; }
-            QPushButton:pressed { background-color: #5a1d1d; }
-        """
-        
         if state == "RUNNING":
+            self.status_overlay.show()
             self.run_start_time = QTime.currentTime()
             self.elapsed_ms = 0
             self.run_timer.start(50) # Faster update for smooth spinner
             self.run_btn.setText("CANCEL")
-            self.run_btn.setStyleSheet(style_cancel)
+            self.run_btn.setStyleSheet(Styles.BUTTON_CANCEL)
             self.output_edit.setPlaceholderText("Running...")
         elif state == "QUEUED":
+            self.status_overlay.show()
             self.run_timer.start(50) # Animate spinner even if queued (e.g. slow pulse or rotate)
             self.elapsed_ms = 0
             self.run_btn.setText("CANCEL") # allow cancel from queue
-            self.run_btn.setStyleSheet(style_cancel)
+            self.run_btn.setStyleSheet(Styles.BUTTON_CANCEL)
             self.output_edit.setPlaceholderText("Queued...")
         else: # IDLE
+            self.status_overlay.hide()
             self.run_timer.stop()
 
             self.run_btn.setText("RUN")
-            self.run_btn.setStyleSheet(style_idle)
+            self.run_btn.setStyleSheet(Styles.BUTTON_RUN)
             # Placeholder updated by externally setting output or cleared
             
         self.update()
@@ -579,7 +524,7 @@ class NodeItem(QGraphicsObject):
              self.spinner_angle = 0
              
         if self.execution_state == "RUNNING" or self.execution_state == "QUEUED":
-            self.spinner_angle = (self.spinner_angle + 30) % 360
+            self.spinner_angle = (self.spinner_angle + Timing.SPINNER_ROTATION_DEGREES) % 360
             if self.execution_state == "RUNNING" and self.run_start_time:
                 self.elapsed_ms = self.run_start_time.msecsTo(QTime.currentTime())
             self.update() # trigger paint
@@ -591,45 +536,47 @@ class NodeItem(QGraphicsObject):
         
         # --- 1. Background & Selection Highlight ---
         if self.isSelected():
-            painter.setPen(QPen(QColor("#00aaff"), 3))
+            painter.setPen(QPen(QColor(Colors.SELECTION), 3))
             painter.setBrush(Qt.NoBrush)
             painter.drawRoundedRect(rect, 8, 8)
         
         if self.node.is_dirty:
-            painter.setPen(QPen(QColor("#e6c60d"), 2, Qt.DashLine))
+            painter.setPen(QPen(QColor(Colors.DIRTY), 2, Qt.DashLine))
         else:
-            painter.setPen(QPen(QColor("#444"), 1))
+            painter.setPen(QPen(QColor(Colors.BORDER_DEFAULT), 1))
             
-        painter.setBrush(QBrush(QColor("#2b2b2b")))
+        painter.setBrush(QBrush(QColor(Colors.NODE_BG)))
         painter.drawRoundedRect(rect, 8, 8)
         
         # --- 2. Header ---
         header_path = QPainterPath()
-        header_path.moveTo(0, 36)
+        # Header top part height is roughly half the total header height (75)
+        header_split = 36 # height for the title part
+        header_path.moveTo(0, header_split)
         header_path.lineTo(0, 8)
         header_path.quadTo(0, 0, 8, 0)
         header_path.lineTo(self.width - 8, 0)
         header_path.quadTo(self.width, 0, self.width, 8)
-        header_path.lineTo(self.width, 36)
+        header_path.lineTo(self.width, header_split)
         header_path.closeSubpath()
         
         # Highlight header if active/selected
         if self.isSelected():
-            header_color = QColor("#1a4d7a") 
+            header_color = QColor(Colors.NODE_HEADER_SELECTED) 
         else:
-            header_color = QColor("#4d4418") if self.node.is_dirty else QColor("#383838")
+            header_color = QColor(Colors.NODE_HEADER_DIRTY) if self.node.is_dirty else QColor(Colors.NODE_HEADER)
             
         painter.fillPath(header_path, header_color)
         
         # Status Dot
-        dot_color = QColor("#e6c60d") if self.node.is_dirty else QColor("#4caf50")
+        dot_color = QColor(Colors.DIRTY) if self.node.is_dirty else QColor(Colors.SUCCESS)
         painter.setBrush(QBrush(dot_color))
         painter.setPen(Qt.NoPen)
         painter.drawEllipse(15, 12, 12, 12)
         
         # Title (Node Name)
-        painter.setPen(QPen(QColor("#fff")))
-        painter.setFont(QFont("Segoe UI", 10, QFont.Bold))
+        painter.setPen(QPen(QColor(Colors.TEXT_PRIMARY)))
+        painter.setFont(QFont(Typography.FAMILY_PRIMARY, Typography.SIZE_NORMAL, QFont.Bold))
         
         display_name = self.node.name or self.node.id
         header_text_width = self.width - 60
@@ -640,8 +587,8 @@ class NodeItem(QGraphicsObject):
             painter.drawText(38, 24, elided_name)
         
         # 3. Header Info Labels
-        painter.setPen(QPen(QColor("#aaa")))
-        painter.setFont(QFont("Segoe UI", 9))
+        painter.setPen(QPen(QColor(Colors.TEXT_SECONDARY)))
+        painter.setFont(QFont(Typography.FAMILY_PRIMARY, Typography.SIZE_NORMAL))
         
         model_text = self.resolve_provider_model_text()
         metrics_model = painter.fontMetrics()
@@ -650,16 +597,14 @@ class NodeItem(QGraphicsObject):
         
         painter.drawText(15, 50, elided_model)
 
-        painter.setPen(QPen(QColor("#888")))
-        painter.setFont(QFont("Segoe UI", 8))
+        painter.setPen(QPen(QColor(Colors.TEXT_TERTIARY)))
+        painter.setFont(QFont(Typography.FAMILY_PRIMARY, Typography.SIZE_SMALL))
         painter.drawText(15, 68, f"Trace Depth: {self.node.config.trace_depth} (Auto)")
 
         # 4. Footer Metrics (New Layout)
-        footer_top = self.height - 50
+        footer_top = self.height - Sizing.FOOTER_HEIGHT
         
         # 4.a Context Payload Meter
-        # Logic: Run btn is 80px + 15 margin = 95px end.
-        # Start payload at x = 110
         current = getattr(self, '_payload_chars', 0)
         limit = getattr(self, '_max_chars', 16000 * 4) 
         
@@ -667,18 +612,18 @@ class NodeItem(QGraphicsObject):
         
         meter_x = 110
         meter_y = footer_top + 10
-        meter_width = 120
-        meter_height = 8
+        meter_width = Sizing.METER_WIDTH
+        meter_height = Sizing.METER_HEIGHT
         
         # Background
-        painter.setBrush(QBrush(QColor("#222")))
+        painter.setBrush(QBrush(QColor(Colors.METER_BG)))
         painter.setPen(Qt.NoPen)
         painter.drawRoundedRect(meter_x, meter_y, meter_width, meter_height, 4, 4)
         
         # Fill
-        meter_color = QColor("#2d8a4e")
-        if ratio > 0.8: meter_color = QColor("#e6c60d")
-        if ratio > 0.95: meter_color = QColor("#d32f2f")
+        meter_color = QColor(Colors.METER_LOW)
+        if ratio > 0.8: meter_color = QColor(Colors.METER_MEDIUM)
+        if ratio > 0.95: meter_color = QColor(Colors.METER_HIGH)
         
         fill_width = int(meter_width * ratio)
         if fill_width > 0:
@@ -686,8 +631,8 @@ class NodeItem(QGraphicsObject):
             painter.drawRoundedRect(meter_x, meter_y, fill_width, meter_height, 4, 4)
             
         # Label above meter
-        painter.setPen(QPen(QColor("#666")))
-        painter.setFont(QFont("Segoe UI", 8))
+        painter.setPen(QPen(QColor(Colors.TEXT_DISABLED)))
+        painter.setFont(QFont(Typography.FAMILY_PRIMARY, Typography.SIZE_SMALL))
         painter.drawText(meter_x, meter_y - 3, "Context Payload")
         
         # Numbers below meter
@@ -696,47 +641,49 @@ class NodeItem(QGraphicsObject):
         def fmt_k(v): return f"{v/1000:.1f}k" if v > 1000 else str(v)
         payload_text = f"{fmt_k(tok_curr)} / {fmt_k(tok_limit)}"
         
-        painter.setPen(QPen(QColor("#888")))
-        painter.setFont(QFont("Segoe UI", 8))
+        painter.setPen(QPen(QColor(Colors.TEXT_TERTIARY)))
+        painter.setFont(QFont(Typography.FAMILY_PRIMARY, Typography.SIZE_SMALL))
         painter.drawText(meter_x, meter_y + 18, payload_text)
         
         # 4.a1 Execution Status (Next to Run Button) - REMOVED (Moved to Center Overlay)
 
         # 4.b Tokens
-        # Right of payload
         tokens_x = meter_x + meter_width + 20
         
         out_len = len(self.node.cached_output or "") if self.node.cached_output else 0
         est_tokens = out_len // 4
         
-        painter.setPen(QPen(QColor("#666")))
-        painter.setFont(QFont("Segoe UI", 8))
+        painter.setPen(QPen(QColor(Colors.TEXT_DISABLED)))
+        painter.setFont(QFont(Typography.FAMILY_PRIMARY, Typography.SIZE_SMALL))
         painter.drawText(tokens_x, meter_y - 3, "Output Tokens")
         
-        painter.setPen(QPen(QColor("#888")))
-        painter.setFont(QFont("Segoe UI", 8))
+        painter.setPen(QPen(QColor(Colors.TEXT_TERTIARY)))
+        painter.setFont(QFont(Typography.FAMILY_PRIMARY, Typography.SIZE_SMALL))
         painter.drawText(tokens_x, meter_y + 18, f"{est_tokens}")
 
         # 5. Ports
-        out_port_y = 60 + 15
-        painter.setBrush(QBrush(QColor("#777")))
-        painter.setPen(QPen(QColor("#333")))
-        painter.drawRect(self.width - 8, out_port_y, 8, 16)
+        out_port_y = Sizing.HEADER_HEIGHT
+        port_size = Sizing.PORT_SIZE
+        port_height = Sizing.PORT_HEIGHT
         
-        y_offset = 75
+        painter.setBrush(QBrush(QColor(Colors.PORT_DEFAULT)))
+        painter.setPen(QPen(QColor(Colors.PORT_BORDER)))
+        painter.drawRect(self.width - port_size, out_port_y, port_size, port_height)
+        
+        y_offset = Sizing.HEADER_HEIGHT
         for _ in self.node.input_links:
-            painter.setBrush(QBrush(QColor("#fff"))) 
-            painter.drawRect(0, y_offset, 8, 16)
+            painter.setBrush(QBrush(QColor(Colors.PORT_ACTIVE))) 
+            painter.drawRect(0, y_offset, port_size, port_height)
             y_offset += 24
-        painter.setBrush(QBrush(QColor("#555")))
-        painter.drawRect(0, y_offset, 8, 16)
-        painter.setPen(QPen(QColor("#aaa")))
+        painter.setBrush(QBrush(QColor(Colors.PORT_ADD)))
+        painter.drawRect(0, y_offset, port_size, port_height)
+        painter.setPen(QPen(QColor(Colors.TEXT_SECONDARY)))
         painter.setFont(QFont("Arial", 10, QFont.Bold))
         painter.drawText(-12, y_offset + 12, "+")
         
         # 6. Resize Handle
         handle_rect = self.get_resize_handle_rect()
-        painter.setPen(QPen(QColor("#666"), 1))
+        painter.setPen(QPen(QColor(Colors.TEXT_DISABLED), 1))
         painter.setBrush(Qt.NoBrush)
         for i in range(3):
             offset = i * 4

@@ -2,6 +2,7 @@
 from PySide6.QtWidgets import QWidget, QVBoxLayout, QTextEdit
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor, QTextCharFormat, QFont
+from .theme import Colors, Styles
 
 class LogWindow(QWidget):
     def __init__(self, parent=None):
@@ -13,7 +14,7 @@ class LogWindow(QWidget):
         layout = QVBoxLayout(self)
         self.text_edit = QTextEdit()
         self.text_edit.setReadOnly(True)
-        self.text_edit.setStyleSheet("background-color: #111; color: #eee; font-family: Consolas, monospace;")
+        self.text_edit.setStyleSheet(Styles.LOG_WINDOW)
         layout.addWidget(self.text_edit)
         
     def append_log(self, record):
@@ -23,13 +24,13 @@ class LogWindow(QWidget):
         level_name = record.levelname if hasattr(record, 'levelname') else "INFO"
         
         # Color Coding
-        color = "#cccccc" # Default
-        if "QT" in name: color = "#4caf50" # Green
-        elif "LLM" in name: color = "#2196f3" # Blue
-        elif "CORE" in name: color = "#ff9800" # Orange
+        color = Colors.LOG_DEFAULT
+        if "QT" in name: color = Colors.LOG_QT
+        elif "LLM" in name: color = Colors.LOG_LLM
+        elif "CORE" in name: color = Colors.LOG_CORE
         
-        if level_name == "ERROR": color = "#f44336" # Red
-        elif level_name == "WARNING": color = "#ffeb3b" # Yellow
+        if level_name == "ERROR": color = Colors.LOG_ERROR
+        elif level_name == "WARNING": color = Colors.LOG_WARNING
         
         # Format
         self.text_edit.setTextColor(QColor(color))

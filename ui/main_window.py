@@ -13,6 +13,7 @@ from services.llm_queue_manager import LLMQueueManager
 from .editor_tab import EditorTab
 from .settings_dialog import SettingsDialog
 from .log_window import LogWindow
+from .theme import Colors, Sizing, Styles
 
 class AntiGravityWindow(QMainWindow):
     def __init__(self):
@@ -160,47 +161,7 @@ class AntiGravityWindow(QMainWindow):
         settings_action.triggered.connect(self.open_settings)
         window_menu.addAction(settings_action)
         
-        self.setStyleSheet("""
-            QMainWindow { background-color: #1e1e1e; color: #e0e0e0; }
-            QMenuBar { background-color: #2b2b2b; color: #eee; }
-            QMenuBar::item:selected { background-color: #444; }
-            QMenu { 
-                background-color: #2b2b2b; 
-                border: 1px solid #444; 
-                padding: 4px;
-            }
-            QMenu::item {
-                padding: 6px 10px 6px 10px;
-                border: 1px solid transparent;
-            }
-            QMenu::item:selected { 
-                background-color: #3e3e3e; 
-                border: 1px solid #00aaff;
-                border-radius: 3px;
-            }
-            QMenu::separator {
-                height: 1px;
-                background: #444;
-                margin: 4px 8px;
-            }
-            QTabWidget::pane { border: 1px solid #444; top: -1px; }
-            QTabBar::tab {
-                background: #2b2b2b;
-                color: #aaa;
-                padding: 8px 12px;
-                border: 1px solid #444;
-                border-bottom: none;
-                min-width: 100px;
-            }
-            QTabBar::tab:selected {
-                background: #1e1e1e;
-                color: #fff;
-                border-bottom: 1px solid #1e1e1e;
-            }
-            QTabBar::tab:!selected:hover {
-                background: #333;
-            }
-        """)
+        self.setStyleSheet(Styles.MAIN_WINDOW + Styles.TAB_WIDGET)
         
         # Start with one empty tab
         self.new_graph()

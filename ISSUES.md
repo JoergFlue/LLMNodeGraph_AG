@@ -27,6 +27,11 @@ This document provides a comprehensive analysis of current issues, technical deb
 **Date Resolved:** Jan 2026  
 **Description:** Implemented prominent visual feedback (blue border and glow) for selected nodes.
 
+### 4. Synchronous HTTP Requests
+**Status:** ✅ Resolved  
+**Date Resolved:** Jan 2026  
+**Description:** Refactored `LLMWorker` to use `httpx` and `asyncio`. Implemented non-blocking background fetching for model lists in settings dialogs. Added full cancellation support for LLM requests.
+
 ---
 
 ## 🟡 Functional Limitations
@@ -91,19 +96,6 @@ This document provides a comprehensive analysis of current issues, technical deb
 
 ## 🔧 Technical Debt
 
-### 8. Synchronous HTTP Requests
-**Severity:** Medium  
-**Impact:** Potential UI freezing, scalability
-
-**Description:**
-- Uses `requests` library (blocking) in `QThread`
-- Works but not optimal for async operations
-- No cancellation support for in-flight requests
-
-**Recommendation:**
-- Consider `aiohttp` with `asyncio` bridge
-- Or use `QNetworkAccessManager` for Qt-native async
-- Add request cancellation capability
 
 ### 9. Inconsistent Error Handling
 **Severity:** Medium  
@@ -118,20 +110,11 @@ This document provides a comprehensive analysis of current issues, technical deb
 - Implement centralized error handler
 - Show user-friendly messages with details in logs
 - Add error reporting/telemetry option
-
-### 10. Hard-Coded UI Constants
-**Severity:** Low  
-**Impact:** Maintainability, customization
-
-**Description:**
-- Colors, sizes, and spacing hard-coded in paint methods
-- Difficult to theme or adjust visually
-- No centralized style configuration
-
-**Recommendation:**
-- Create theme/style configuration file
-- Use Qt stylesheets where possible
-- Extract constants to dedicated module
+### 10. Hard-Coded UI Constants [RESOLVED]
+**Severity:** Low | **Impact:** Maintainability, Customization
+**Description:** UI components had hard-coded colors, sizes, and spacing.
+**Recommendation:** Centralize constants in a dedicated module.
+**Status:** Fixed by creating `ui/theme.py` and refactorings all UI components.
 
 ### 11. Limited Logging Context
 **Severity:** Low  
@@ -602,7 +585,7 @@ This document provides a comprehensive analysis of current issues, technical deb
 |----------|----------|------|--------|-----|-------|
 | Critical Issues | 0 | 1 | 0 | 0 | 1 |
 | Functional Limitations | 0 | 0 | 3 | 4 | 7 |
-| Technical Debt | 0 | 0 | 3 | 3 | 6 |
+| Technical Debt | 0 | 0 | 2 | 3 | 5 |
 | UI/UX Issues | 0 | 0 | 2 | 3 | 5 |
 | Performance | 0 | 0 | 1 | 2 | 3 |
 | Security & Privacy | 0 | 1 | 1 | 0 | 2 |
@@ -613,7 +596,7 @@ This document provides a comprehensive analysis of current issues, technical deb
 | Workflow | 0 | 0 | 0 | 3 | 3 |
 | Monitoring | 0 | 0 | 0 | 2 | 2 |
 | Learning Curve | 0 | 0 | 1 | 1 | 2 |
-| **TOTAL** | **0** | **2** | **16** | **25** | **43** |
+| **TOTAL** | **0** | **2** | **15** | **25** | **42** |
 
 ## Prioritization Recommendations
 
@@ -637,8 +620,7 @@ This document provides a comprehensive analysis of current issues, technical deb
 
 ### Long-term (Future Releases)
 15. Advanced Text Editor (#5)
-16. Async HTTP Requests (#8)
-17. Performance Optimizations (#18, #19, #20)
+16. Performance Optimizations (#18, #19, #20)
 18. UI Enhancements (#13-16)
 19. Analytics & Monitoring (#38, #39)
 

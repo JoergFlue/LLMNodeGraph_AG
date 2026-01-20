@@ -7,6 +7,7 @@ from PySide6.QtCore import Qt, QSize
 from PySide6.QtGui import QIcon
 from core.settings_manager import SettingsManager
 from services.fetch_worker import FetchModelsWorker
+from .theme import Sizing
 import os
 
 class SettingsDialog(QDialog):

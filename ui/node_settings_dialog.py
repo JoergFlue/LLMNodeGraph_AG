@@ -5,6 +5,7 @@ from PySide6.QtWidgets import (QDialog, QVBoxLayout, QLabel, QComboBox,
 from PySide6.QtCore import Qt, Signal
 from services.fetch_worker import FetchModelsWorker
 from core.settings_manager import SettingsManager
+from .theme import Sizing
 
 class NodeSettingsDialog(QDialog):
     def __init__(self, current_provider="Default", current_model="", parent=None):
@@ -53,7 +54,7 @@ class NodeSettingsDialog(QDialog):
         
         # Refresh Button
         self.btn_refresh = QPushButton("⟳")
-        self.btn_refresh.setFixedWidth(30)
+        self.btn_refresh.setFixedWidth(Sizing.BUTTON_HEIGHT)
         self.btn_refresh.setToolTip("Fetch Models for selected interface")
         self.btn_refresh.clicked.connect(self.fetch_models)
         
