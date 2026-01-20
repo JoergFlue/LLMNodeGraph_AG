@@ -8,51 +8,24 @@ This document provides a comprehensive analysis of current issues, technical deb
 
 ---
 
-## 🔴 Critical Issues
+---
 
-### 1. No Automated Testing
-**Severity:** High  
-**Impact:** Code quality, regression prevention, confidence in changes
+## 🟢 Resolved Issues
 
-**Description:**
-- No unit tests for core logic (assembler, graph operations)
-- No integration tests for LLM worker
-- No UI tests for node interactions
-- Manual testing only, prone to regressions
+### 1. No Undo/Redo System
+**Status:** ✅ Resolved  
+**Date Resolved:** Jan 2026  
+**Description:** Full command pattern implemented for all graph operations (add, delete, move, link, rename, paste) with Ctrl+Z/Ctrl+Y support and configurable stack size.
 
-**Recommendation:**
-- Add pytest framework
-- Create unit tests for `ContextAssembler`, `Graph`, `Node`
-- Add integration tests for `LLMWorker` with mocked APIs
-- Consider UI testing with pytest-qt
+### 2. ID Collision on File Merge
+**Status:** ✅ Resolved  
+**Date Resolved:** Jan 2026  
+**Description:** Implemented ID remapping on file load/merge. New UUIDs are generated for imported nodes, and connections are correctly remapped.
 
-### 2. No Undo/Redo System [DONE]
-**Severity:** High  
-**Impact:** User experience, data safety
-
-**Description:**
-- Users cannot undo node deletions or connection changes
-- Accidental operations are permanent (until file reload)
-- No command pattern implementation
-
-**Recommendation:**
-- Implement command pattern for all graph operations
-- Add undo/redo stack with keyboard shortcuts (Ctrl+Z, Ctrl+Y)
-- Consider limiting stack size to prevent memory issues
-
-### 3. ID Collision on File Merge
-**Severity:** Medium  
-**Impact:** Data integrity when merging graphs
-
-**Description:**
-- Node IDs are 8-character UUIDs (e.g., "a1b2c3d4")
-- No collision detection when loading/merging files
-- Could lead to data corruption or unexpected behavior
-
-**Recommendation:**
-- Implement ID remapping on file load if collisions detected
-- Add validation in `Graph.from_dict()`
-- Consider full UUIDs or namespace prefixes
+### 3. No Node Selection Feedback
+**Status:** ✅ Resolved  
+**Date Resolved:** Jan 2026  
+**Description:** Implemented prominent visual feedback (blue border and glow) for selected nodes.
 
 ---
 
@@ -83,7 +56,7 @@ This document provides a comprehensive analysis of current issues, technical deb
 
 **Recommendation:**
 - Consider QScintilla or custom syntax highlighter
-- Add markdown preview mode
+- **Implemented:** Markdown rendering for output fields using `setMarkdown()`.
 - Improve focus handling in embedded widgets
 
 ### 6. No Streaming Response Display
@@ -192,19 +165,6 @@ This document provides a comprehensive analysis of current issues, technical deb
 
 ## 🎨 UI/UX Issues
 
-### 13. No Node Selection Feedback
-**Severity:** Low  
-**Impact:** User experience
-
-**Description:**
-- Selected nodes have subtle visual feedback
-- Difficult to see which nodes are selected in complex graphs
-- No multi-select indicator
-
-**Recommendation:**
-- Add prominent selection border/glow
-- Show selection count in status bar
-- Improve visual hierarchy
 
 ### 14. Wire Routing Could Be Improved
 **Severity:** Low  
@@ -640,10 +600,10 @@ This document provides a comprehensive analysis of current issues, technical deb
 
 | Category | Critical | High | Medium | Low | Total |
 |----------|----------|------|--------|-----|-------|
-| Critical Issues | 0 | 3 | 0 | 0 | 3 |
+| Critical Issues | 0 | 1 | 0 | 0 | 1 |
 | Functional Limitations | 0 | 0 | 3 | 4 | 7 |
 | Technical Debt | 0 | 0 | 3 | 3 | 6 |
-| UI/UX Issues | 0 | 0 | 2 | 4 | 6 |
+| UI/UX Issues | 0 | 0 | 2 | 3 | 5 |
 | Performance | 0 | 0 | 1 | 2 | 3 |
 | Security & Privacy | 0 | 1 | 1 | 0 | 2 |
 | Deployment | 0 | 0 | 1 | 2 | 3 |
@@ -653,7 +613,7 @@ This document provides a comprehensive analysis of current issues, technical deb
 | Workflow | 0 | 0 | 0 | 3 | 3 |
 | Monitoring | 0 | 0 | 0 | 2 | 2 |
 | Learning Curve | 0 | 0 | 1 | 1 | 2 |
-| **TOTAL** | **0** | **4** | **16** | **26** | **46** |
+| **TOTAL** | **0** | **2** | **16** | **25** | **43** |
 
 ## Prioritization Recommendations
 
@@ -661,14 +621,12 @@ This document provides a comprehensive analysis of current issues, technical deb
 1. API Keys Encryption (#21)
 2. Automated Testing Framework (#1)
 3. Settings Validation (#12)
-4. Undo/Redo System (#2)
 
 ### Short-term (Next Month)
-5. @ID Autocomplete (#4)
-6. Search/Filter Functionality (#17)
-7. Error Handling Improvements (#9)
-8. ID Collision Detection (#3)
-9. User Manual (#30)
+4. @ID Autocomplete (#4)
+5. Search/Filter Functionality (#17)
+6. Error Handling Improvements (#9)
+7. User Manual (#30)
 
 ### Medium-term (Next Quarter)
 10. Streaming Response Display (#6)
