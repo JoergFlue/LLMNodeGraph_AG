@@ -6,7 +6,7 @@ from PySide6.QtWidgets import (QDialog, QVBoxLayout, QLabel, QLineEdit,
 from PySide6.QtCore import Qt, QSize
 from PySide6.QtGui import QIcon
 from core.settings_manager import SettingsManager
-import requests
+from services.fetch_worker import FetchModelsWorker
 import os
 
 class SettingsDialog(QDialog):
@@ -15,6 +15,7 @@ class SettingsDialog(QDialog):
         self.setWindowTitle("Settings")
         self.resize(700, 550)
         self.settings = SettingsManager()
+        self._active_workers = []
         
         layout = QVBoxLayout(self)
         
@@ -237,6 +238,12 @@ class SettingsDialog(QDialog):
         self._update_openai_btn_state()
         self._update_gemini_btn_state()
         self._update_openrouter_btn_state()
+        
+        # Auto-fetch models on load (background)
+        self.fetch_ollama_models(auto=True)
+        self.fetch_openai_models(auto=True)
+        self.fetch_gemini_models(auto=True)
+        self.fetch_openrouter_models(auto=True)
 
     def save_to_disk(self):
         self.settings.setValue("default_provider", self.combo_provider.currentText())
@@ -300,100 +307,99 @@ class SettingsDialog(QDialog):
 
 
     # --- Fetching Logic ---
-    def fetch_ollama_models(self):
+    def fetch_ollama_models(self, auto=False):
         host = self.edit_ollama_host.text().replace("http://", "").replace("https://", "").rstrip("/")
         port = self.spin_ollama_port.value()
         base_url = f"http://{host}:{port}"
+        url = f"{base_url}/api/tags"
         
-        try:
-            resp = requests.get(f"{base_url}/api/tags", timeout=5)
-            if resp.status_code == 200:
-                data = resp.json()
-                models = [m['name'] for m in data.get('models', [])]
-                current = self.combo_ollama_model.currentText()
-                self.combo_ollama_model.clear()
-                self.combo_ollama_model.addItems(models)
-                self.combo_ollama_model.setEditText(current) # Preserve if user typed distinct
-                QMessageBox.information(self, "Success", f"Fetched {len(models)} models.")
-            else:
-                QMessageBox.warning(self, "Error", f"Status {resp.status_code}: {resp.text}")
-        except Exception as e:
-            QMessageBox.critical(self, "Error", f"Fetch failed: {e}")
+        def parser(data):
+            return [m['name'] for m in data.get('models', [])]
+        
+        self._start_fetch_worker(url, {}, parser, self.combo_ollama_model, auto)
 
-    def fetch_openai_models(self):
+    def fetch_openai_models(self, auto=False):
         key = self.edit_openai_key.text()
         if not key:
-            QMessageBox.warning(self, "Missing Key", "Enter API Key first.")
+            if not auto: QMessageBox.warning(self, "Missing Key", "Enter API Key first.")
             return
             
-        try:
-            headers = {"Authorization": f"Bearer {key}"}
-            resp = requests.get("https://api.openai.com/v1/models", headers=headers, timeout=10)
-            if resp.status_code == 200:
-                data = resp.json()
-                # Filter mostly for 'gpt' to avoid clutter
-                models = [m['id'] for m in data.get('data', []) if 'gpt' in m['id']]
-                models.sort()
-                current = self.combo_openai_model.currentText()
-                self.combo_openai_model.clear()
-                self.combo_openai_model.addItems(models)
-                self.combo_openai_model.setEditText(current)
-                QMessageBox.information(self, "Success", f"Fetched {len(models)} models.")
-            else:
-                 QMessageBox.warning(self, "Error", f"Status {resp.status_code}")
-        except Exception as e:
-             QMessageBox.critical(self, "Error", f"Fetch failed: {e}")
+        url = "https://api.openai.com/v1/models"
+        headers = {"Authorization": f"Bearer {key}"}
+        
+        def parser(data):
+            models = [m['id'] for m in data.get('data', []) if 'gpt' in m['id']]
+            models.sort()
+            return models
+        
+        self._start_fetch_worker(url, headers, parser, self.combo_openai_model, auto)
 
-    def fetch_gemini_models(self):
+    def fetch_gemini_models(self, auto=False):
         key = self.edit_gemini_key.text()
         if not key:
-            QMessageBox.warning(self, "Missing Key", "Enter API Key first.")
+            if not auto: QMessageBox.warning(self, "Missing Key", "Enter API Key first.")
             return
 
-        try:
-            url = f"https://generativelanguage.googleapis.com/v1beta/models?key={key}"
-            resp = requests.get(url, timeout=10)
-            if resp.status_code == 200:
-                data = resp.json()
-                # names look like "models/gemini-pro"
-                models = [m['name'].replace("models/", "") for m in data.get('models', []) if 'gemini' in m['name']]
-                models.sort()
-                current = self.combo_gemini_model.currentText()
-                self.combo_gemini_model.clear()
-                self.combo_gemini_model.addItems(models)
-                self.combo_gemini_model.setEditText(current)
-                QMessageBox.information(self, "Success", f"Fetched {len(models)} models.")
-            else:
-                 QMessageBox.warning(self, "Error", f"Status {resp.status_code}")
-        except Exception as e:
-             QMessageBox.critical(self, "Error", f"Fetch failed: {e}")
+        url = f"https://generativelanguage.googleapis.com/v1beta/models?key={key}"
+        
+        def parser(data):
+            models = [m['name'].replace("models/", "") for m in data.get('models', []) if 'gemini' in m['name']]
+            models.sort()
+            return models
+        
+        self._start_fetch_worker(url, {}, parser, self.combo_gemini_model, auto)
 
-    def fetch_openrouter_models(self):
+    def fetch_openrouter_models(self, auto=False):
         key = self.edit_openrouter_key.text()
         if not key:
-            QMessageBox.warning(self, "Missing Key", "Enter API Key first.")
+            if not auto: QMessageBox.warning(self, "Missing Key", "Enter API Key first.")
             return
 
-        try:
-            url = "https://openrouter.ai/api/v1/models"
-            headers = {"Authorization": f"Bearer {key}"}
-            resp = requests.get(url, headers=headers, timeout=10)
-            
-            if resp.status_code == 200:
-                data = resp.json()
-                # data['data'] is a list of objects with 'id'
-                models = [m['id'] for m in data.get('data', [])]
-                models.sort()
-                
-                current = self.combo_openrouter_model.currentText()
-                self.combo_openrouter_model.clear()
-                self.combo_openrouter_model.addItems(models)
-                self.combo_openrouter_model.setEditText(current)
-                QMessageBox.information(self, "Success", f"Fetched {len(models)} models.")
-            else:
-                 QMessageBox.warning(self, "Error", f"Status {resp.status_code}")
-        except Exception as e:
-             QMessageBox.critical(self, "Error", f"Fetch failed: {e}")
+        url = "https://openrouter.ai/api/v1/models"
+        headers = {"Authorization": f"Bearer {key}"}
+        
+        def parser(data):
+            models = [m['id'] for m in data.get('data', [])]
+            models.sort()
+            return models
+        
+        self._start_fetch_worker(url, headers, parser, self.combo_openrouter_model, auto)
+
+    def _start_fetch_worker(self, url, headers, parser, combo, auto=False):
+        worker = FetchModelsWorker(url, headers, parser)
+        self._active_workers.append(worker)
+        
+        worker.finished.connect(lambda models: self._on_fetch_success(models, combo, auto))
+        worker.error.connect(lambda err: self._on_fetch_error(err, auto))
+        
+        # Cleanup when done
+        worker.finished.connect(lambda: self._cleanup_worker(worker))
+        worker.error.connect(lambda: self._cleanup_worker(worker))
+        
+        worker.start()
+        # Visual feedback
+        if not auto:
+            self.setCursor(Qt.WaitCursor)
+
+    def _cleanup_worker(self, worker):
+        if worker in self._active_workers:
+            self._active_workers.remove(worker)
+            worker.deleteLater()
+
+    def _on_fetch_success(self, models, combo, auto=False):
+        if not auto:
+            self.unsetCursor()
+        current = combo.currentText()
+        combo.clear()
+        combo.addItems(models)
+        combo.setEditText(current)
+        if not auto:
+            QMessageBox.information(self, "Success", f"Fetched {len(models)} models.")
+
+    def _on_fetch_error(self, error_msg, auto=False):
+        if not auto:
+            self.unsetCursor()
+            QMessageBox.critical(self, "Error", f"Fetch failed: {error_msg}")
 
     # --- Test Functions (Simple Reachability + Model check?) ---
     def test_ollama(self):

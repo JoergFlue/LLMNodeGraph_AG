@@ -1,8 +1,10 @@
 
-import requests
+import httpx
 import json
 import os
 import logging
+import asyncio
+import time
 from PySide6.QtCore import QThread, Signal
 from core.settings_manager import SettingsManager
 
@@ -21,47 +23,70 @@ class LLMWorker(QThread):
         self.logger = logging.getLogger("LLM.Worker")
         self.is_cancelled = False
         self._start_time = 0
+        self._loop = None
+        self._current_task = None
 
     def cancel(self):
         self.is_cancelled = True
+        if self._loop and self._current_task:
+            self._loop.call_soon_threadsafe(self._current_task.cancel)
         
     def run(self):
-        import time
         self._start_time = time.time()
         self.started.emit()
-        self.logger.info(f"Starting request for Node {self.node_id}")
+        self.logger.info(f"Starting async request for Node {self.node_id}")
         
         if self.is_cancelled: return
+
+        # Create and run a new event loop in this thread
+        self._loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(self._loop)
         
+        try:
+            self._current_task = self._loop.create_task(self._async_run())
+            self._loop.run_until_complete(self._current_task)
+        except asyncio.CancelledError:
+            self.logger.info(f"Task for Node {self.node_id} was cancelled.")
+        except Exception as e:
+            self.logger.error(f"Node {self.node_id} failed: {e}")
+            self.error.emit(self.node_id, f"Error: {str(e)}")
+        finally:
+            self._loop.close()
+            self._loop = None
+            self._current_task = None
+
+    async def _async_run(self):
         try:
             # Determine effective model
             model = self.config.get("model", "")
             provider = self.config.get("provider", "Default")
             
-            # Explicit Provider Override
-            if provider == "OpenAI":
-                self._call_openai()
-            elif provider == "Gemini":
-                self._call_gemini()
-            elif provider == "OpenRouter":
-                self._call_openrouter()
-            elif provider == "Ollama":
-                self._call_ollama()
-            else:
-                # Fallback to heuristic (Default)
-                if model.startswith("gpt") or model.startswith("o1"):
-                     self._call_openai()
-                elif model.startswith("gemini"):
-                     self._call_gemini()
+            async with httpx.AsyncClient(timeout=120.0) as client:
+                # Explicit Provider Override
+                if provider == "OpenAI":
+                    await self._call_openai(client)
+                elif provider == "Gemini":
+                    await self._call_gemini(client)
+                elif provider == "OpenRouter":
+                    await self._call_openrouter(client)
+                elif provider == "Ollama":
+                    await self._call_ollama(client)
                 else:
-                     # Default to Ollama for everything else
-                     self._call_ollama()
-                
+                    # Fallback to heuristic (Default)
+                    if model.startswith("gpt") or model.startswith("o1"):
+                         await self._call_openai(client)
+                    elif model.startswith("gemini"):
+                         await self._call_gemini(client)
+                    else:
+                         # Default to Ollama for everything else
+                         await self._call_ollama(client)
+        except asyncio.CancelledError:
+            raise
         except Exception as e:
-            self.logger.error(f"Node {self.node_id} failed: {e}")
-            self.error.emit(self.node_id, f"Error: {str(e)}")
+            # Re-raise to be handled in run()
+            raise e
 
-    def _call_ollama(self):
+    async def _call_ollama(self, client: httpx.AsyncClient):
         host = self.settings.value("ollama_host", "localhost")
         port = self.settings.value("ollama_port", 11434)
         
@@ -70,8 +95,6 @@ class LLMWorker(QThread):
         base_url = f"http://{host}:{port}"
         url = f"{base_url}/api/generate"
         
-        # If node model is set, use it. If not (or generic), fallback to settings default?
-        # Node usually has a model.
         model = self.config.get("model", self.settings.value("ollama_model", "llama3"))
         
         payload = {
@@ -81,20 +104,21 @@ class LLMWorker(QThread):
         }
         
         try:
-            response = requests.post(url, json=payload, timeout=120)
+            response = await client.post(url, json=payload)
             response.raise_for_status()
             data = response.json()
             result = data.get("response", "")
+            
             if self.is_cancelled: return
             self.logger.info(f"Ollama response received ({len(result)} chars)")
             self.finished.emit(self.node_id, result)
-        except requests.RequestException as e:
+        except httpx.HTTPError as e:
             msg = str(e)
-            if "404" in msg:
+            if response is not None and response.status_code == 404:
                 msg += f"\nCheck if model '{model}' is pulled in Ollama."
             raise Exception(f"Ollama connection failed to {base_url}: {msg}")
 
-    def _call_openai(self):
+    async def _call_openai(self, client: httpx.AsyncClient):
         api_key = self.settings.value("openai_key")
         if not api_key:
             api_key = os.environ.get("OPENAI_API_KEY")
@@ -116,17 +140,18 @@ class LLMWorker(QThread):
         }
         
         try:
-            response = requests.post(url, headers=headers, json=payload, timeout=120)
+            response = await client.post(url, headers=headers, json=payload)
             response.raise_for_status()
             data = response.json()
             result = data['choices'][0]['message']['content']
+            
             if self.is_cancelled: return
             self.logger.info(f"OpenAI response received ({len(result)} chars)")
             self.finished.emit(self.node_id, result)
-        except requests.RequestException as e:
+        except httpx.HTTPError as e:
              raise Exception(f"OpenAI API failed: {e}")
 
-    def _call_gemini(self):
+    async def _call_gemini(self, client: httpx.AsyncClient):
         api_key = self.settings.value("gemini_key")
         if not api_key:
             raise Exception("Google Gemini API Key not configured in Settings")
@@ -143,11 +168,12 @@ class LLMWorker(QThread):
         }
         
         try:
-            response = requests.post(url, headers=headers, json=payload, timeout=120)
+            response = await client.post(url, headers=headers, json=payload)
             response.raise_for_status()
             data = response.json()
             try:
                 result = data['candidates'][0]['content']['parts'][0]['text']
+                
                 if self.is_cancelled: return
                 self.logger.info(f"Gemini response received ({len(result)} chars)")
                 self.finished.emit(self.node_id, result)
@@ -155,23 +181,22 @@ class LLMWorker(QThread):
                 error_msg = json.dumps(data) if data else "Empty response"
                 raise Exception(f"Unexpected Gemini response: {error_msg}")
                 
-        except requests.RequestException as e:
+        except httpx.HTTPError as e:
              raise Exception(f"Gemini API failed: {e}")
 
-    def _call_openrouter(self):
+    async def _call_openrouter(self, client: httpx.AsyncClient):
         api_key = self.settings.value("openrouter_key")
         if not api_key:
             raise Exception("OpenRouter API Key not configured in Settings")
             
-        # Default fallback if not specified
         model = self.config.get("model", self.settings.value("openrouter_model", "openai/gpt-3.5-turbo"))
         
         url = "https://openrouter.ai/api/v1/chat/completions"
         
         headers = {
             "Authorization": f"Bearer {api_key}",
-            "HTTP-Referer": "https://github.com/JoergFlue/LLMNodeGraph_AG", # Optional good practice
-            "X-Title": "AntiGravity", # Optional good practice
+            "HTTP-Referer": "https://github.com/JoergFlue/LLMNodeGraph_AG",
+            "X-Title": "AntiGravity",
             "Content-Type": "application/json"
         }
         
@@ -181,13 +206,13 @@ class LLMWorker(QThread):
         }
         
         try:
-            response = requests.post(url, headers=headers, json=payload, timeout=120)
+            response = await client.post(url, headers=headers, json=payload)
             response.raise_for_status()
             data = response.json()
-            # OpenRouter response structure mirrors OpenAI
             result = data['choices'][0]['message']['content']
+            
             if self.is_cancelled: return
             self.logger.info(f"OpenRouter response received ({len(result)} chars)")
             self.finished.emit(self.node_id, result)
-        except requests.RequestException as e:
+        except httpx.HTTPError as e:
              raise Exception(f"OpenRouter API failed: {e}")

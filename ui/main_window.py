@@ -28,6 +28,8 @@ class AntiGravityWindow(QMainWindow):
         self.log_window = LogWindow()
         self.log_signaler.log_signal.connect(self.log_window.append_log)
         
+        self.settings_dialog = None
+        
         # LLM Queue Manager
         self.queue_manager = LLMQueueManager()
         # EditorTab connects itself to queue_manager signals
@@ -481,6 +483,8 @@ class AntiGravityWindow(QMainWindow):
         self.log_window.raise_()
         
     def open_settings(self):
-        dialog = SettingsDialog(self)
-        if dialog.exec():
-            pass
+        if self.settings_dialog is None:
+            self.settings_dialog = SettingsDialog(self)
+        self.settings_dialog.show()
+        self.settings_dialog.raise_()
+        self.settings_dialog.activateWindow()

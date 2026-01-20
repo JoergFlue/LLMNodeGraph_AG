@@ -151,14 +151,12 @@ class LLMQueueManager(QObject):
         if provider_found:
             del self.active_workers[provider_found]
             
-            # CRITICAL FIX: Ensure thread is fully finished before checking next
+            # Ensure thread is fully finished
             if worker.isRunning():
                 worker.quit()
-                worker.wait()
-            else:
-                worker.wait()
-            worker.deleteLater()
+                worker.wait(1000) # Optional timeout just in case
             
+            worker.deleteLater()
             self.process_next_in_queue(provider_found)
 
     def process_next_in_queue(self, provider):
