@@ -6,6 +6,9 @@ from PySide6.QtWidgets import (QDialog, QVBoxLayout, QLabel, QLineEdit,
 from PySide6.QtCore import Qt, QSize
 from PySide6.QtGui import QIcon
 from core.settings_manager import SettingsManager
+from core.error_handler import show_error
+from core.error_handler import show_error
+from core.provider_status import ProviderStatusManager
 from services.fetch_worker import FetchModelsWorker
 from .theme import Sizing
 import os
@@ -265,6 +268,9 @@ class SettingsDialog(QDialog):
         self.settings.setValue("openrouter_model", self.combo_openrouter_model.currentText())
         
         self.settings.sync()
+        
+        # Trigger Status Re-check
+        ProviderStatusManager.instance().check_all()
 
     def apply_settings(self):
         self.save_to_disk()
@@ -322,7 +328,7 @@ class SettingsDialog(QDialog):
     def fetch_openai_models(self, auto=False):
         key = self.edit_openai_key.text()
         if not key:
-            if not auto: QMessageBox.warning(self, "Missing Key", "Enter API Key first.")
+            if not auto: show_error("Missing Key", "Enter API Key first.")
             return
             
         url = "https://api.openai.com/v1/models"
@@ -338,7 +344,7 @@ class SettingsDialog(QDialog):
     def fetch_gemini_models(self, auto=False):
         key = self.edit_gemini_key.text()
         if not key:
-            if not auto: QMessageBox.warning(self, "Missing Key", "Enter API Key first.")
+            if not auto: show_error("Missing Key", "Enter API Key first.")
             return
 
         url = f"https://generativelanguage.googleapis.com/v1beta/models?key={key}"
@@ -353,7 +359,7 @@ class SettingsDialog(QDialog):
     def fetch_openrouter_models(self, auto=False):
         key = self.edit_openrouter_key.text()
         if not key:
-            if not auto: QMessageBox.warning(self, "Missing Key", "Enter API Key first.")
+            if not auto: show_error("Missing Key", "Enter API Key first.")
             return
 
         url = "https://openrouter.ai/api/v1/models"
@@ -366,41 +372,10 @@ class SettingsDialog(QDialog):
         
         self._start_fetch_worker(url, headers, parser, self.combo_openrouter_model, auto)
 
-    def _start_fetch_worker(self, url, headers, parser, combo, auto=False):
-        worker = FetchModelsWorker(url, headers, parser)
-        self._active_workers.append(worker)
-        
-        worker.finished.connect(lambda models: self._on_fetch_success(models, combo, auto))
-        worker.error.connect(lambda err: self._on_fetch_error(err, auto))
-        
-        # Cleanup when done
-        worker.finished.connect(lambda: self._cleanup_worker(worker))
-        worker.error.connect(lambda: self._cleanup_worker(worker))
-        
-        worker.start()
-        # Visual feedback
-        if not auto:
-            self.setCursor(Qt.WaitCursor)
-
-    def _cleanup_worker(self, worker):
-        if worker in self._active_workers:
-            self._active_workers.remove(worker)
-            worker.deleteLater()
-
-    def _on_fetch_success(self, models, combo, auto=False):
-        if not auto:
-            self.unsetCursor()
-        current = combo.currentText()
-        combo.clear()
-        combo.addItems(models)
-        combo.setEditText(current)
-        if not auto:
-            QMessageBox.information(self, "Success", f"Fetched {len(models)} models.")
-
     def _on_fetch_error(self, error_msg, auto=False):
         if not auto:
             self.unsetCursor()
-            QMessageBox.critical(self, "Error", f"Fetch failed: {error_msg}")
+            show_error("Error", f"Fetch failed: {error_msg}")
 
     # --- Test Functions (Simple Reachability + Model check?) ---
     def test_ollama(self):

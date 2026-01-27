@@ -5,8 +5,10 @@ from PySide6.QtWidgets import QMainWindow, QToolBar, QMessageBox, QFileDialog, Q
 from PySide6.QtGui import QAction, QIcon, QCloseEvent
 from PySide6.QtCore import QPointF, Qt
 from core.settings_manager import SettingsManager
+from core.error_handler import show_error
 from core.graph import Graph
 from core.logging_setup import setup_logging
+from core.provider_status import ProviderStatusManager
 import logging
 
 from services.llm_queue_manager import LLMQueueManager
@@ -34,6 +36,12 @@ class AntiGravityWindow(QMainWindow):
         # LLM Queue Manager
         self.queue_manager = LLMQueueManager()
         # EditorTab connects itself to queue_manager signals
+        
+        # Provider Health Check
+        self.provider_status = ProviderStatusManager.instance()
+        # Perform initial check shortly after startup
+        from PySide6.QtCore import QTimer
+        QTimer.singleShot(1000, self.provider_status.check_all)
         
         # UI Setup: Tab Widget
         self.tabs = QTabWidget()
@@ -270,8 +278,8 @@ class AntiGravityWindow(QMainWindow):
             self.add_tab(graph, path)
             self.logger.info("Load successful")
         except Exception as e:
-            self.logger.error(f"Load failed: {e}")
-            QMessageBox.critical(self, "Load Error", str(e))
+            self.logger.error(f"Load failed: {e}", exc_info=True)
+            show_error("Load Error", str(e), details=str(e))
 
     def save_current_tab(self):
         tab = self.get_current_tab()
@@ -379,8 +387,8 @@ class AntiGravityWindow(QMainWindow):
             self.statusBar().showMessage(f"Merged {path}", 3000)
             
         except Exception as e:
-            self.logger.error(f"Merge failed: {e}")
-            QMessageBox.critical(self, "Merge Error", str(e))
+            self.logger.error(f"Merge failed: {e}", exc_info=True)
+            show_error("Merge Error", str(e), details=str(e))
 
     # --- Delegated Actions ---
     def undo(self):

@@ -5,7 +5,9 @@ from PySide6.QtWidgets import (QDialog, QVBoxLayout, QLabel, QComboBox,
 from PySide6.QtCore import Qt, Signal
 from services.fetch_worker import FetchModelsWorker
 from core.settings_manager import SettingsManager
+from core.error_handler import show_error
 from .theme import Sizing
+import logging
 
 class NodeSettingsDialog(QDialog):
     def __init__(self, current_provider="Default", current_model="", parent=None):
@@ -78,6 +80,11 @@ class NodeSettingsDialog(QDialog):
 
     def on_provider_changed(self, text):
         self.selected_provider = text
+        
+        # Detect if this is a user action (signal sender is the combo box)
+        # If user changed it, we want explicit feedback (auto=False)
+        is_user_action = self.sender() == self.combo_provider
+        
         if text == "Default":
             self.combo_model.setEnabled(False)
             self.btn_refresh.setEnabled(False)
@@ -94,7 +101,9 @@ class NodeSettingsDialog(QDialog):
                 self.combo_model.clear()
                 self.combo_model.setEditText("")
                 # Auto-fetch models (background)
-                self.fetch_models(auto=True)
+                # If user action, show loading/errors (auto=False)
+                # If init, be silent (auto=True)
+                self.fetch_models(auto=not is_user_action)
 
     def fetch_models(self, auto=False):
         provider = self.combo_provider.currentText()
@@ -122,7 +131,7 @@ class NodeSettingsDialog(QDialog):
     def _fetch_openai(self, auto=False):
         key = self.settings.value("openai_key")
         if not key:
-            if not auto: QMessageBox.warning(self, "Missing Key", "Configure OpenAI API Key in Global Settings first.")
+            if not auto: show_error("Missing Key", "Configure OpenAI API Key in Global Settings first.")
             return
         url = "https://api.openai.com/v1/models"
         headers = {"Authorization": f"Bearer {key}"}
@@ -137,7 +146,7 @@ class NodeSettingsDialog(QDialog):
     def _fetch_gemini(self, auto=False):
         key = self.settings.value("gemini_key")
         if not key:
-            if not auto: QMessageBox.warning(self, "Missing Key", "Configure Gemini API Key in Global Settings first.")
+            if not auto: show_error("Missing Key", "Configure Gemini API Key in Global Settings first.")
             return
         url = f"https://generativelanguage.googleapis.com/v1beta/models?key={key}"
         
@@ -151,7 +160,7 @@ class NodeSettingsDialog(QDialog):
     def _fetch_openrouter(self, auto=False):
         key = self.settings.value("openrouter_key")
         if not key:
-            if not auto: QMessageBox.warning(self, "Missing Key", "Configure OpenRouter API Key in Global Settings first.")
+            if not auto: show_error("Missing Key", "Configure OpenRouter API Key in Global Settings first.")
             return
         url = "https://openrouter.ai/api/v1/models"
         headers = {"Authorization": f"Bearer {key}"}
@@ -187,9 +196,24 @@ class NodeSettingsDialog(QDialog):
         self._update_model_list(models, auto)
 
     def _on_fetch_error(self, error_msg, auto):
+        logging.getLogger("UI.NodeSettings").warning(f"Model fetch failed: {error_msg}")
         if not auto: 
             self.unsetCursor()
-            QMessageBox.critical(self, "Error", f"Fetch failed: {error_msg}")
+            
+            # User-friendly mapping
+            title = "Fetch Failed"
+            user_msg = f"Unable to fetch models.\n\nError: {error_msg}"
+            details = str(error_msg)
+            
+            # Check for common connection errors
+            if "10061" in str(error_msg) or "Connection refused" in str(error_msg):
+                title = "Connection Failed"
+                user_msg = (
+                    f"Could not connect to {self.selected_provider}.\n"
+                    "Please ensure the service is running and reachable at the configured address."
+                )
+            
+            show_error(title, user_msg, details=details)
 
     def _update_model_list(self, models, auto=False):
         current = self.combo_model.currentText()

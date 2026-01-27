@@ -6,6 +6,7 @@ from PySide6.QtGui import QPainter, QColor, QPen, QBrush, QPainterPath, QFont, Q
 from core.node import Node
 from core.graph import Graph
 from core.settings_manager import SettingsManager
+from core.provider_status import ProviderStatusManager
 from .node_settings_dialog import NodeSettingsDialog
 from .theme import Colors, Sizing, Spacing, Typography, Timing, Styles
 
@@ -130,6 +131,15 @@ class NodeItem(QGraphicsObject):
         self.run_start_time = None
         self.elapsed_ms = 0
         self.spinner_angle = 0
+        
+        self.provider_status = ProviderStatusManager.instance()
+        self.provider_status.status_changed.connect(self.on_provider_status_changed)
+        
+        # Initial Check
+        # Trigger a check if we don't know the status yet
+        effective_provider = self.resolve_effective_provider()
+        if self.provider_status.get_status(effective_provider) is None:
+             pass # get_status triggers check internally
 
         
         # Read size from node
@@ -473,7 +483,51 @@ class NodeItem(QGraphicsObject):
         
         return f"{display_provider}/{display_model}" if display_model else display_provider
 
+    def resolve_effective_provider(self):
+        """Helper to determine the actual provider in use (resolving Default)."""
+        config_provider = self.node.config.provider or "Default"
+        if config_provider != "Default":
+            return config_provider
+            
+        settings = SettingsManager()
+        # Heuristic resolution based on global default or model prefix
+        # This mirrors resolve_provider_model_text logic but returns jus provider name
+        config_model = self.node.config.model or ""
+        if not config_model:
+             return settings.value("default_provider", "Ollama")
+             
+        if config_model.startswith("gpt") or config_model.startswith("o1"):
+            return "OpenAI"
+        elif config_model.startswith("gemini"):
+            return "Gemini"
+        else:
+            return "Ollama"
+
+    def on_provider_status_changed(self, provider, is_active):
+        # Check if this node uses the updated provider
+        effective = self.resolve_effective_provider()
+        if effective == provider:
+            self.update()
+
     # --- Metrics ---
+    
+    # ... (existing methods) ...
+
+    def paint(self, painter: QPainter, option, widget):
+        # ... (lines 1-597)
+        
+        painter.drawText(15, 50, elided_model)
+        
+        # 3.b Status Check (Red Text Overlay if failed)
+        effective = self.resolve_effective_provider()
+        status = self.provider_status.get_status(effective)
+        if status is False: # Explicitly False means checked and failed
+             painter.setPen(QPen(QColor(Colors.ERROR)))
+             painter.drawText(15, 50, elided_model) # Redraw over with red? Or just draw red initially
+             # Better: Reset pen before drawing text above if status is False
+             
+        painter.setPen(QPen(QColor(Colors.TEXT_TERTIARY)))
+        # ...
     def calculate_context_usage(self):
         prompt_len = len(self.node.prompt)
         return prompt_len 
@@ -587,7 +641,16 @@ class NodeItem(QGraphicsObject):
             painter.drawText(38, 24, elided_name)
         
         # 3. Header Info Labels
-        painter.setPen(QPen(QColor(Colors.TEXT_SECONDARY)))
+        
+        # Check Status
+        effective = self.resolve_effective_provider()
+        status = self.provider_status.get_status(effective)
+        
+        text_color = QColor(Colors.TEXT_SECONDARY)
+        if status is False:
+             text_color = QColor(Colors.ERROR)
+             
+        painter.setPen(QPen(text_color))
         painter.setFont(QFont(Typography.FAMILY_PRIMARY, Typography.SIZE_NORMAL))
         
         model_text = self.resolve_provider_model_text()

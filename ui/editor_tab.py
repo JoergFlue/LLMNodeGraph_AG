@@ -17,6 +17,7 @@ from core.command import (
     EditOutputCommand, PasteNodesAndLinksCommand
 )
 from core.settings_manager import SettingsManager
+from core.error_handler import show_error
 
 from .canvas import CanvasScene, CanvasView
 from .node_item import NodeItem
@@ -258,7 +259,7 @@ class EditorTab(QWidget):
         try:
             prompt = assembler.assemble(node)
         except Exception as e:
-            QMessageBox.critical(self, "Assembly Error", str(e))
+            show_error("Assembly Error", str(e))
             return
             
         config = {
@@ -315,7 +316,7 @@ class EditorTab(QWidget):
              # But for now, let's keep it.
              node = self.graph.nodes.get(node_id)
              display_name = node.name if node else node_id
-             QMessageBox.warning(self, "Execution Error", f"Node {display_name} failed:\n{error_msg}")
+             show_error("Execution Error", f"Node {display_name} failed:\n{error_msg}")
 
     def on_node_moved(self, node_id):
         node = self.graph.nodes.get(node_id)
@@ -535,8 +536,8 @@ class EditorTab(QWidget):
             self.status_message.emit(f"Saved to {path}", 3000)
             return True
         except Exception as e:
-            self.logger.error(f"Save failed: {e}")
-            QMessageBox.critical(self, "Save Error", str(e))
+            self.logger.error(f"Save failed: {e}", exc_info=True)
+            show_error("Save Error", str(e), details=str(e))
             return False
 
     def close_check(self):
