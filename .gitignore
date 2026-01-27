@@ -11,3 +11,9 @@ wheels/
 
 # User Settings
 .usersettings/
+
+#logs
+test_results.log
+
+# Documentation
+docs/_build/

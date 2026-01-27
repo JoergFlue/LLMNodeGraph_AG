@@ -61,9 +61,7 @@ def test_merge_positioning():
     graph.merge_graph(incoming_data, "merged_file")
     
     node_b = graph.nodes.get("node-b")
-    if not node_b:
-        print("✗ FAILED: Node B not found after merge")
-        return False
+    assert node_b is not None, "Node B not found after merge"
         
     print(f"Merged Node Pos: ({node_b.pos_x}, {node_b.pos_y})")
     
@@ -71,16 +69,16 @@ def test_merge_positioning():
     expected_y = 500.0
     
     margin = 0.1
-    match_x = abs(node_b.pos_x - expected_x) < margin
-    match_y = abs(node_b.pos_y - expected_y) < margin
-    
-    if match_x and match_y:
-        print(f"✓ Position matches expected ({expected_x}, {expected_y})")
-        print("=" * 70)
-        return True
-    else:
-        print(f"✗ FAILED: Position mismatch! Expected ({expected_x}, {expected_y})")
-        return False
+    # Check X
+    assert abs(node_b.pos_x - expected_x) < margin, \
+        f"X Position mismatch! Expected {expected_x}, got {node_b.pos_x}"
+        
+    # Check Y
+    assert abs(node_b.pos_y - expected_y) < margin, \
+        f"Y Position mismatch! Expected {expected_y}, got {node_b.pos_y}"
+        
+    print(f"✓ Position matches expected ({expected_x}, {expected_y})")
+    print("=" * 70)
 
 if __name__ == "__main__":
     if test_merge_positioning():

@@ -61,20 +61,14 @@ def test_merge_dirty_suppression():
     # Empty graph -> keep IDs.
     
     node_b = graph.nodes.get("node-b")
-    if not node_b:
-        print("✗ FAILED: Node B not found")
-        return False
+    assert node_b is not None, "Node B not found"
         
     print(f"Node B is_dirty state: {node_b.is_dirty}")
     
-    if node_b.is_dirty == False:
-        print("✓ SUCCESS: Node B remained clean after merge/rewiring.")
-        print("=" * 70)
-        return True
-    else:
-        print("✗ FAILED: Node B became dirty! Suppression failed.")
-        print("=" * 70)
-        return False
+    assert node_b.is_dirty is False, "Node B became dirty! Suppression failed."
+
+    print("✓ SUCCESS: Node B remained clean after merge/rewiring.")
+    print("=" * 70)
 
 if __name__ == "__main__":
     if test_merge_dirty_suppression():

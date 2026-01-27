@@ -32,7 +32,8 @@ async def test_worker_async_logic():
                 # We need to mock finished.emit because signals need a QEventLoop 
                 # or we can just check if it was called
                 worker.finished = MagicMock()
-                await worker._async_run()
+                mock_logger = MagicMock()
+                await worker._async_run(mock_logger)
                 
                 worker.finished.emit.assert_called_with("test_node", "Mocked response")
 

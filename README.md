@@ -172,6 +172,8 @@ AntiGravity follows a sophisticated modular architecture with advanced design pa
    ```bash
    pip install -r requirements.txt
    ```
+   
+   *Note: A `requirements.txt` file is provided for compatibility with standard `pip` environments.*
 
 3. **Configure LLM Providers** (see Configuration section)
 

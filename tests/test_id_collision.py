@@ -53,11 +53,8 @@ def test_collision_detection():
     
     print(f"\n  Node IDs are unique: {len(node_ids) == len(unique_node_ids)}")
     
-    if len(node_ids) == len(unique_node_ids):
-        print("  ✓ All node IDs are unique")
-    else:
-        print("  ✗ FAILED: Duplicate node IDs found!")
-        return False
+    assert len(node_ids) == len(unique_node_ids), "Duplicate node IDs found!"
+    print("  ✓ All node IDs are unique")
     
     # Verify all link IDs are unique
     link_ids = list(graph.links.keys())
@@ -65,47 +62,28 @@ def test_collision_detection():
     
     print(f"  Link IDs are unique: {len(link_ids) == len(unique_link_ids)}")
     
-    if len(link_ids) == len(unique_link_ids):
-        print("  ✓ All link IDs are unique")
-    else:
-        print("  ✗ FAILED: Duplicate link IDs found!")
-        return False
+    assert len(link_ids) == len(unique_link_ids), "Duplicate link IDs found!"
+    print("  ✓ All link IDs are unique")
     
     # Verify expected number of nodes and links
     expected_nodes = 3
     expected_links = 2  # Two links with same ID should both be loaded with unique IDs
     
-    if len(graph.nodes) == expected_nodes:
-        print(f"  ✓ Correct number of nodes: {expected_nodes}")
-    else:
-        print(f"  ✗ FAILED: Expected {expected_nodes} nodes, got {len(graph.nodes)}")
-        return False
+    assert len(graph.nodes) == expected_nodes, f"Expected {expected_nodes} nodes, got {len(graph.nodes)}"
+    print(f"  ✓ Correct number of nodes: {expected_nodes}")
     
-    if len(graph.links) == expected_links:
-        print(f"  ✓ Correct number of links: {expected_links}")
-    else:
-        print(f"  ✗ FAILED: Expected {expected_links} links, got {len(graph.links)}")
-        return False
+    assert len(graph.links) == expected_links, f"Expected {expected_links} links, got {len(graph.links)}"
+    print(f"  ✓ Correct number of links: {expected_links}")
     
     # Verify all links reference valid nodes
-    all_links_valid = True
     for link_id, link in graph.links.items():
-        if link.source_id not in graph.nodes:
-            print(f"  ✗ Link {link_id} references invalid source: {link.source_id}")
-            all_links_valid = False
-        if link.target_id not in graph.nodes:
-            print(f"  ✗ Link {link_id} references invalid target: {link.target_id}")
-            all_links_valid = False
+        assert link.source_id in graph.nodes, f"Link {link_id} references invalid source: {link.source_id}"
+        assert link.target_id in graph.nodes, f"Link {link_id} references invalid target: {link.target_id}"
     
-    if all_links_valid:
-        print("  ✓ All links reference valid nodes")
-    else:
-        return False
-    
+    print("  ✓ All links reference valid nodes")
     print("\n" + "=" * 70)
     print("✓ ALL TESTS PASSED - ID collision detection working correctly!")
     print("=" * 70)
-    return True
 
 def test_valid_file():
     """Test that valid files still load correctly (no regression)."""
@@ -142,14 +120,11 @@ def test_valid_file():
     
     graph = Graph.from_dict(valid_data)
     
-    if len(graph.nodes) == 1 and "node-1" in graph.nodes:
-        print("  ✓ Valid file loaded correctly")
-        print("=" * 70)
-        return True
-    else:
-        print("  ✗ FAILED: Valid file not loaded correctly")
-        print("=" * 70)
-        return False
+    assert len(graph.nodes) == 1, "Valid file not loaded correctly: wrong node count"
+    assert "node-1" in graph.nodes, "Valid file not loaded correctly: node-1 missing"
+    
+    print("  ✓ Valid file loaded correctly")
+    print("=" * 70)
 
 if __name__ == "__main__":
     test1_passed = test_collision_detection()

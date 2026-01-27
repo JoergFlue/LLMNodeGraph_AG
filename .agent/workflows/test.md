@@ -6,5 +6,5 @@ Run the tests using `uv` to ensure the correct environment is used.
 // turbo
 1. Run the tests
 ```bash
-uv run pytest
+uv run pytest -v
 ```

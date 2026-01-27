@@ -7,47 +7,50 @@ This document tracks current technical debt, architectural challenges, and secur
 
 ## 🔧 Technical Debt
 
-### 1. No Validation on Settings
+### 1. No Validation on Settings ✅ RESOLVED
 **Severity:** Medium
 **Impact:** User experience, error prevention
+**Status:** ✅ **Resolved** (2026-01-28)
 
 **Description:**
 - Settings dialog accepts invalid inputs (e.g., negative ports).
 - No validation before saving.
 - Can lead to runtime errors.
 
-**Recommendation:**
-- Add input validators (QIntValidator, QRegExpValidator).
-- Validate on save and show clear error messages.
-- Test connections before accepting settings.
+**Resolution:**
+- Implemented `validate_inputs()` in `SettingsDialog`.
+- Added validators (e.g., `QIntValidator` for token limit).
+- Added checks for URL format and API key presence.
+- Validation now runs before saving settings.
 
-### 2. Missing Requirements.txt
+### 2. Missing Requirements.txt ✅ RESOLVED
 **Severity:** Low
 **Impact:** Compatibility with pip users
+**Status:** ✅ **Resolved** (2026-01-28)
 
 **Description:**
 - Only `pyproject.toml` and `uv.lock` provided.
 - Users without `uv` need to manually extract dependencies.
 - Reduces accessibility.
 
-**Recommendation:**
-- Generate `requirements.txt` from pyproject.toml.
-- Include in repository.
-- Document both installation methods.
+**Resolution:**
+- Generated `requirements.txt` using `uv pip compile`.
+- Updated `README.md` to include explicit pip installation instructions.
 
-### 3. No API Documentation
+### 3. No API Documentation ✅ RESOLVED
 **Severity:** Medium
 **Impact:** Developer experience
+**Status:** ✅ **Resolved** (2026-01-28)
 
 **Description:**
 - No docstrings for many methods.
 - No generated API documentation.
 - Difficult for contributors to understand code.
 
-**Recommendation:**
-- Add comprehensive docstrings (Google/NumPy style).
-- Generate docs with Sphinx.
-- Include architecture diagrams.
+**Resolution:**
+- Configured Sphinx documentation with `sphinx-rtd-theme`.
+- Added Google-style docstrings to `GraphController`.
+- Documentation can be built via `uv run sphinx-build`.
 
 ### 4. No Performance Metrics
 **Severity:** Low

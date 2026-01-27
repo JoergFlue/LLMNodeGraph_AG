@@ -4,7 +4,7 @@ from PySide6.QtWidgets import (QDialog, QVBoxLayout, QLabel, QLineEdit,
                                QComboBox, QTabWidget, QWidget, QSpinBox,
                                QPushButton, QHBoxLayout, QMessageBox, QToolButton)
 from PySide6.QtCore import Qt, QSize
-from PySide6.QtGui import QIcon
+from PySide6.QtGui import QIcon, QIntValidator, QDoubleValidator
 from core.settings_manager import SettingsManager
 from core.error_handler import show_error
 from core.error_handler import show_error
@@ -33,6 +33,7 @@ class SettingsDialog(QDialog):
         
         self.edit_token_limit = QLineEdit()
         self.edit_token_limit.setPlaceholderText("16383")
+        self.edit_token_limit.setValidator(QIntValidator(1, 10000000))
         layout_general.addRow("Global Token Limit:", self.edit_token_limit)
         
         self.spin_undo_stack = QSpinBox()
@@ -276,8 +277,41 @@ class SettingsDialog(QDialog):
         self.save_to_disk()
 
     def accept_settings(self):
-        self.save_to_disk()
-        self.accept()
+        if self.validate_inputs():
+            self.save_to_disk()
+            self.accept()
+
+    def validate_inputs(self):
+        # 1. Token Limit
+        if not self.edit_token_limit.hasAcceptableInput():
+             show_error("Invalid Input", "Global Token Limit must be a number between 1 and 10,000,000")
+             return False
+
+        # 2. Provider Specific Validation (if that provider is selected)
+        current_provider = self.combo_provider.currentText()
+        
+        if current_provider == "Ollama":
+            host = self.edit_ollama_host.text().strip()
+            if not host.startswith(("http://", "https://")):
+                show_error("Invalid Check", "Ollama Host must start with http:// or https://")
+                return False
+        
+        elif current_provider == "OpenAI":
+            if not self.edit_openai_key.text().strip():
+                show_error("Missing Key", "OpenAI API Key is required when OpenAI is selected.")
+                return False
+                
+        elif current_provider == "Gemini":
+            if not self.edit_gemini_key.text().strip():
+                show_error("Missing Key", "Gemini API Key is required when Gemini is selected.")
+                return False
+
+        elif current_provider == "OpenRouter":
+            if not self.edit_openrouter_key.text().strip():
+                show_error("Missing Key", "OpenRouter API Key is required when OpenRouter is selected.")
+                return False
+
+        return True
 
     # --- UI State Logic ---
     def _update_ollama_btn_state(self):
