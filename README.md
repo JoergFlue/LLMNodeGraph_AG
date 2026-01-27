@@ -78,6 +78,18 @@ AntiGravity follows a sophisticated modular architecture with advanced design pa
   - Configurable stack size with automatic cleanup
   - Operation descriptions for UI feedback
 
+- **`graph_controller.py`**: Graph operations controller (MVP pattern)
+  - Manages all graph file operations (create, load, save, merge)
+  - Handles dirty state tracking and file path management
+  - Separates business logic from UI concerns
+  - Fully tested with 33 unit tests
+
+- **`tab_controller.py`**: Tab lifecycle controller (MVP pattern)
+  - Manages tab creation, closing, and activation
+  - Coordinates between tabs and graph controllers
+  - Emits signals for UI synchronization
+  - Fully tested with 37 unit tests
+
 ### UI Modules (`ui/`)
 
 - **`main_window.py`**: Multi-document interface orchestration
@@ -341,6 +353,8 @@ AntiGravity/
 │   ├── command.py          # Command pattern implementations
 │   ├── command_manager.py  # Undo/redo system management
 │   ├── graph.py            # Sophisticated graph state management
+│   ├── graph_controller.py # Graph operations controller (MVP)
+│   ├── tab_controller.py   # Tab lifecycle controller (MVP)
 │   ├── logging_setup.py    # Multi-level logging configuration
 │   ├── node.py             # Advanced node and link models
 │   └── settings_manager.py # Persistent configuration management
@@ -359,6 +373,11 @@ AntiGravity/
 │   ├── theme.py            # Centralized styling system
 │   └── wire_item.py        # Bezier curve connection rendering
 ├── tests/                  # Comprehensive test suite
+│   ├── conftest.py         # Shared pytest fixtures
+│   ├── test_graph_controller.py    # GraphController tests (33 tests)
+│   ├── test_tab_controller.py      # TabController tests (37 tests)
+│   ├── test_main_window_integration.py # Integration tests (18 tests)
+│   └── test_ui_functionality.py    # UI component tests
 ├── main.py                 # Application entry point
 ├── pyproject.toml          # Modern Python project configuration
 └── requirements.txt        # Pip compatibility
@@ -368,6 +387,7 @@ AntiGravity/
 
 - **Command Pattern**: Complete undo/redo system for all graph operations
 - **Observer Pattern**: Signal/slot architecture for loose coupling between components
+- **MVP Pattern**: Model-View-Presenter with controller layer for business logic separation
 - **Queue Pattern**: Sophisticated task management for concurrent LLM processing
 - **Singleton Pattern**: Centralized settings and configuration management
 - **MVC Architecture**: Clear separation between data models, business logic, and presentation

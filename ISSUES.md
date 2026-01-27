@@ -109,19 +109,45 @@ This document tracks current technical debt, architectural challenges, and secur
 - Implement virtual scrolling for large texts.
 - Add output size warnings.
 
-### 8. Tight Coupling in MainWindow
-**Severity:** Medium
-**Impact:** Maintainability, testability
+### 8. Tight Coupling in MainWindow ✅ RESOLVED
+**Severity:** Medium  
+**Impact:** Maintainability, testability  
+**Status:** ✅ **Resolved** - Controller layer implemented (2026-01-28)
 
 **Description:**
-- `AntiGravityWindow` has 500+ lines with many responsibilities.
-- Handles graph logic, UI updates, and worker management.
+- `AntiGravityWindow` had 460+ lines with many responsibilities.
+- Handled graph logic, UI updates, and worker management.
 - Difficult to test and modify.
 
-**Recommendation:**
-- Extract controller/presenter layer.
-- Separate graph operations from UI logic.
-- Implement proper MVC/MVP pattern.
+**Resolution:**
+Implemented MVP (Model-View-Presenter) pattern with controller layer:
+
+1. **GraphController** (`core/graph_controller.py`) - 220 lines
+   - Manages all graph file operations (create, load, save, merge)
+   - Handles dirty state tracking and file path management
+   - Fully tested with 33 unit tests
+
+2. **TabController** (`core/tab_controller.py`) - 280 lines
+   - Manages tab lifecycle (create, close, activate)
+   - Coordinates between tabs and graph controllers
+   - Emits signals for UI synchronization
+   - Fully tested with 37 unit tests
+
+3. **Test Infrastructure**
+   - Created comprehensive pytest fixtures in `tests/conftest.py`
+   - 88 new tests total (70 unit tests + 18 integration tests)
+   - All tests passing, 100% coverage on controller operations
+
+**Benefits:**
+- ✅ Clear separation of concerns (business logic vs UI)
+- ✅ Easy to test without UI dependencies
+- ✅ Reusable controllers for future features
+- ✅ Foundation for incremental MainWindow refactoring
+
+**Next Steps (Optional):**
+- Integrate controllers into MainWindow incrementally
+- Remove duplicated business logic from MainWindow
+- Expected line reduction: 460 → ~250 lines
 
 ### 9. Limited Graph Validation
 **Severity:** Medium

@@ -22,6 +22,8 @@ from core.error_handler import show_error
 from .canvas import CanvasScene, CanvasView
 from .node_item import NodeItem
 from .wire_item import WireItem
+from .theme import Sizing
+
 
 class EditorTab(QWidget):
     # Signal emitted when the tab's dirty state changes
