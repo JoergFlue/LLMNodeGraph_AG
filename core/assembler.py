@@ -1,19 +1,40 @@
 
+"""
+Context Assembler - Assembles the context payload for LLM requests.
+"""
+
 import re
 from typing import Optional
 from .node import Node
 from .graph import Graph
 
 class ContextAssembler:
+    """
+    Assembles the context payload for an LLM request.
+    """
     def __init__(self, graph: Graph):
+        """
+        Initialize the assembler.
+        
+        Args:
+            graph (Graph): The graph instance containing the nodes.
+        """
         self.graph = graph
 
     def assemble(self, node: Node) -> str:
         """
-        Assembles the context for a node:
+        Assembles the context for a node.
+        
+        Process:
         1. Inherited history from primary parent (trace_depth).
         2. Resolve @ID references from inputs in the current prompt.
         3. Merge and enforce token limits.
+        
+        Args:
+            node (Node): The target node to assemble context for.
+            
+        Returns:
+            str: The final assembled prompt string.
         """
         # 1. Gather History (Sequential Context from Primary Parent)
         history_text = self._gather_history(node, node.config.trace_depth)
@@ -67,6 +88,13 @@ class ContextAssembler:
         """
         Recursively fetches cached output from the primary parent (first input)
         up to the specified depth.
+        
+        Args:
+            node (Node): Current node.
+            depth (int): Remaining recursion depth.
+            
+        Returns:
+            str: Accumulated history text.
         """
         if depth <= 0 or not node.input_links:
             return ""
@@ -96,12 +124,20 @@ class ContextAssembler:
         """
         Replace @ID or @Label with the cached output of the connected node.
         Only resolves nodes that are physically connected as inputs.
+        
+        Args:
+            prompt (str): The raw prompt text.
+            node (Node): The context node.
+            
+        Returns:
+            str: Prompt with references replaced.
         """
         input_nodes = self.graph.get_input_nodes(node.id)
         # Create map for ID matching
         ref_map = {n.id: n.cached_output for n in input_nodes}
         
         def replace(match):
+            """Regex replacement callback."""
             key = match.group(1)
             # Only replace if key is in connected inputs
             if key in ref_map:
@@ -112,8 +148,18 @@ class ContextAssembler:
 
     def _enforce_limit(self, history: str, prompt: str, limit: int) -> str:
         """
+        Enforce token/character limit.
+        
         Simple char/4 heuristic. 
         Prioritizes Prompt + References. Truncates History from the top (oldest).
+        
+        Args:
+            history (str): The history/context block.
+            prompt (str): The current prompt.
+            limit (int): The max token limit.
+            
+        Returns:
+            str: Truncated text fitting the limit.
         """
         # Estimate tokens (1 token ~= 4 chars)
         prompt_tokens = len(prompt) / 4

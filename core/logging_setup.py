@@ -1,16 +1,23 @@
+"""
+Logging Setup - Configures application logging.
+"""
 
 import logging
 import sys
 from PySide6.QtCore import QObject, Signal
 
 class QtLogSignaler(QObject):
+    """Signals log records to the UI thread."""
     log_signal = Signal(object) # Carries LogRecord
 
 class ContextFilter(logging.Filter):
     """
-    Injects context information into logs.
+    Injects context information (node_id) into logs.
     """
     def filter(self, record):
+        """
+        Add node_id/request_id to record if missing.
+        """
         if not hasattr(record, 'node_id'):
             record.node_id = ''
         if not hasattr(record, 'request_id'):
@@ -18,14 +25,36 @@ class ContextFilter(logging.Filter):
         return True
 
 class QtLogHandler(logging.Handler):
+    """
+    Custom handler that emits log records via Qt signal.
+    """
     def __init__(self, signaler: QtLogSignaler):
+        """
+        Initialize the handler.
+        
+        Args:
+            signaler (QtLogSignaler): The object to emit signals from.
+        """
         super().__init__()
         self.signaler = signaler
 
     def emit(self, record):
+        """Emit the log record signal."""
         self.signaler.log_signal.emit(record)
 
 def setup_logging():
+    """
+    Configure the application logging system.
+    
+    Sets up:
+    1. Root logger level.
+    2. Terminal handler (ERROR+).
+    3. Custom Qt handler (INFO+).
+    4. Formatters and filters.
+    
+    Returns:
+        Tuple[QtLogSignaler, QtLogHandler]: The signaler and handler instances.
+    """
     root_val = logging.getLogger()
     root_val.setLevel(logging.INFO)
     

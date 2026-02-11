@@ -1,10 +1,17 @@
+"""
+Graph - Data structure representing the flow graph.
+"""
 
 from typing import Dict, List, Optional
 import json
 from .node import Node, Link
 
 class Graph:
+    """
+    Manages the directed graph of Nodes and Links.
+    """
     def __init__(self):
+        """Initialize an empty graph."""
         self.nodes: Dict[str, Node] = {}
         self.links: Dict[str, Link] = {}
         self.global_token_limit: int = 16384
@@ -33,9 +40,21 @@ class Graph:
         return str(uuid.uuid4())
 
     def add_node(self, node: Node):
+        """
+        Add a node to the graph.
+        
+        Args:
+            node (Node): The node to add.
+        """
         self.nodes[node.id] = node
 
     def remove_node(self, node_id: str):
+        """
+        Remove a node and all connected links from the graph.
+        
+        Args:
+            node_id (str): ID of the node to remove.
+        """
         if node_id in self.nodes:
             del self.nodes[node_id]
         
@@ -48,6 +67,17 @@ class Graph:
             self.remove_link(l_id)
 
     def add_link(self, source_id: str, target_id: str, trigger_dirty: bool = True) -> Link:
+        """
+        Create and add a link between two nodes.
+        
+        Args:
+            source_id (str): ID of the source node.
+            target_id (str): ID of the target node.
+            trigger_dirty (bool): Whether to mark the target node as dirty.
+            
+        Returns:
+            Link: The created link.
+        """
         # Check for cycles or duplicate links if needed (omitted for MVP speed, but good to have)
         link = Link(source_id=source_id, target_id=target_id)
         self.links[link.id] = link
@@ -61,6 +91,12 @@ class Graph:
         return link
 
     def remove_link(self, link_id: str):
+        """
+        Remove a link from the graph.
+        
+        Args:
+            link_id (str): ID of the link to remove.
+        """
         if link_id in self.links:
             link = self.links[link_id]
             target_id = link.target_id
@@ -72,14 +108,18 @@ class Graph:
                 self.mark_dirty(target_id)
 
     def mark_dirty(self, node_id: str):
-        """Mark node and its descendants as dirty."""
+        """
+        Mark node and its descendants as dirty (needing re-execution).
+        
+        Args:
+            node_id (str): ID of the node starting the dirty chain.
+        """
         if node_id not in self.nodes:
             return
             
         node = self.nodes[node_id]
         if node.is_dirty:
-            return # Already marked, prevent infinite recursion in valid DAG, but technically we should propagate still?
-            # In a DAG, simple recursion works.
+            return # Already marked
         
         node.is_dirty = True
         
@@ -92,6 +132,15 @@ class Graph:
             self.mark_dirty(child_id)
 
     def get_input_nodes(self, node_id: str) -> List[Node]:
+        """
+        Get the list of nodes connected to the inputs of a given node.
+        
+        Args:
+            node_id (str): ID of the node.
+            
+        Returns:
+            List[Node]: List of input node instances.
+        """
         if node_id not in self.nodes:
             return []
         
@@ -216,6 +265,12 @@ class Graph:
                 self.add_link(new_source, new_target, trigger_dirty=False)
 
     def to_dict(self):
+        """
+        Serialize the graph to a dictionary.
+        
+        Returns:
+            Dict[str, Any]: Dictionary representation of the graph.
+        """
         return {
             "version": "2.0",
             "app_settings": {"global_token_limit": self.global_token_limit},

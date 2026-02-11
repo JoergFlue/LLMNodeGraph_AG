@@ -1,3 +1,6 @@
+"""
+Provider Status - Manages and validates connectivity to LLM providers.
+"""
 
 import logging
 from PySide6.QtCore import QObject, Signal, QTimer
@@ -16,11 +19,13 @@ class ProviderStatusManager(QObject):
     
     @classmethod
     def instance(cls):
+        """Get the singleton instance."""
         if cls._instance is None:
             cls._instance = ProviderStatusManager()
         return cls._instance
 
     def __init__(self):
+        """Initialize the manager."""
         super().__init__()
         self.logger = logging.getLogger("ProviderStatus")
         self.settings = SettingsManager()
@@ -33,6 +38,12 @@ class ProviderStatusManager(QObject):
         """
         Returns True if provider is active, False if inactive, or None if unknown/checking.
         Triggers a check if status is unknown.
+        
+        Args:
+            provider (str): Provider name.
+            
+        Returns:
+            bool/None: Status or None if pending.
         """
         if provider not in self.status_cache:
             self.check_provider(provider)
@@ -41,7 +52,12 @@ class ProviderStatusManager(QObject):
         return self.status_cache[provider].get("active")
 
     def invalidate(self, provider):
-        """Forces a re-check for the provider."""
+        """
+        Forces a re-check for the provider.
+        
+        Args:
+            provider (str): Provider name.
+        """
         if provider in self.status_cache:
             del self.status_cache[provider]
         self.check_provider(provider)
@@ -53,6 +69,12 @@ class ProviderStatusManager(QObject):
             self.check_provider(p)
 
     def check_provider(self, provider):
+        """
+        Initiate a check for a specific provider.
+        
+        Args:
+            provider (str): Provider name.
+        """
         # Avoid duplicate checks
         if provider in self.status_cache and self.status_cache[provider].get("checking"):
             return
@@ -95,6 +117,7 @@ class ProviderStatusManager(QObject):
         # Use FetchModelsWorker for validation
         # We don't need the actual models, just success/fail
         def dummy_parser(data):
+            """Parser that ignores data."""
             return []
 
         worker = FetchModelsWorker(url, headers, dummy_parser)
@@ -106,16 +129,25 @@ class ProviderStatusManager(QObject):
         worker.start()
 
     def _on_success(self, provider, worker):
+        """Handle successful check."""
         if worker in self._active_workers:
             self._active_workers.remove(worker)
         self._update_status(provider, True)
         
     def _on_error(self, provider, worker):
+        """Handle failed check."""
         if worker in self._active_workers:
             self._active_workers.remove(worker)
         self._update_status(provider, False)
 
     def _update_status(self, provider, is_active):
+        """
+        Update internal status and emit signal if changed.
+        
+        Args:
+            provider (str): Provider name.
+            is_active (bool): New status.
+        """
         old_status = self.status_cache.get(provider, {}).get("active")
         self.status_cache[provider] = {"active": is_active, "checking": False}
         

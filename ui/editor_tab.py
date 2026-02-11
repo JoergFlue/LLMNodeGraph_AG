@@ -235,6 +235,7 @@ class EditorTab(QWidget):
         item.runClicked.connect(self.on_run_clicked)
         item.cancelClicked.connect(self.on_cancel_clicked)
         item.wireDragStarted.connect(self.on_wire_drag_started)
+        item.inputWireDragStarted.connect(self.on_input_wire_drag_started)
         item.wireDragMoved.connect(self.on_wire_drag_moved)
         item.wireDragReleased.connect(self.on_wire_drag_released)
         item.positionChanged.connect(self.on_node_moved)
@@ -364,9 +365,42 @@ class EditorTab(QWidget):
         item.set_metrics(total_chars, node.config.max_tokens * 4)
 
     def on_wire_drag_started(self, source_id, pos):
+        self.is_reverse_wiring = False
         self.dragging_source_id = source_id
+        self.dragging_target_id = None
         self.temp_wire = WireItem(pos, pos)
         self.scene.addItem(self.temp_wire)
+
+    def on_input_wire_drag_started(self, target_node_id, link_id, pos):
+        """Handle dragging from an input port - disconnect old link if exists and start new drag."""
+        self.is_reverse_wiring = True
+        self.dragging_target_id = target_node_id
+        self.dragging_source_id = None
+        
+        # If there was an existing link, disconnect it
+        if link_id:
+            link = self.graph.links.get(link_id)
+            if link:
+                self.link_to_remove = link_id
+                
+                # Remove the visual wire immediately
+                if link_id in self.wires:
+                    self.scene.removeItem(self.wires[link_id])
+                    del self.wires[link_id]
+                
+                # Remove the link from the graph
+                remove_cmd = DeleteLinkCommand(self.graph, link)
+                self.command_manager.execute(remove_cmd)
+        
+        # Start the new wire drag from the input port position
+        # For reverse wiring, we use the input port as the "source" anchor for the visual wire
+        # but logically it's the target.
+        self.temp_wire = WireItem(pos, pos)
+        self.scene.addItem(self.temp_wire)
+        
+        # Update the target node's visuals
+        if target_node_id in self.node_items:
+            self.node_items[target_node_id].update()
 
     def on_wire_drag_moved(self, pos):
         if self.temp_wire:
@@ -375,65 +409,88 @@ class EditorTab(QWidget):
     def on_wire_drag_released(self, pos):
         if not self.temp_wire: return
 
-        target_node_id = None
+        # Identify Drop Target
+        drop_node_id = None
         items = self.scene.items(pos)
         for item in items:
             if isinstance(item, NodeItem):
-                if item.node.id == self.dragging_source_id: continue
-                if item.check_input_drop(pos):
-                    target_node_id = item.node.id
-                    break
+                # Standard check: if reverse wiring, we look for an OUTPUT hit. 
+                # If forward wiring, we look for an INPUT hit.
+                if self.is_reverse_wiring:
+                    if item.node.id == self.dragging_target_id: continue
+                    if item.check_output_drop(pos):
+                        drop_node_id = item.node.id
+                        break
+                else:
+                    if item.node.id == self.dragging_source_id: continue
+                    if item.check_input_drop(pos):
+                        drop_node_id = item.node.id
+                        break
         
-        if target_node_id:
-            # Check dupes
-            existing = False
-            target_node = self.graph.nodes[target_node_id]
-            for input_link_id in target_node.input_links:
-                l = self.graph.links[input_link_id]
-                if l.source_id == self.dragging_source_id:
-                    existing = True
-                    break
+        if drop_node_id:
+            # Reconnect to existing node
+            if self.is_reverse_wiring:
+                source_id = drop_node_id
+                target_id = self.dragging_target_id
+            else:
+                source_id = self.dragging_source_id
+                target_id = drop_node_id
+                
+            # Check for existing link (prevent duplicates)
+            target_node = self.graph.nodes[target_id]
+            existing = any(self.graph.links[l_id].source_id == source_id for l_id in target_node.input_links)
             
             if not existing:
-                link = Link(source_id=self.dragging_source_id, target_id=target_node_id)
+                link = Link(source_id=source_id, target_id=target_id)
                 cmd = AddLinkCommand(self.graph, link)
                 self.command_manager.execute(cmd)
-                
                 self.create_visual_wire(link)
-                self.node_items[target_node_id].update()
-                self.update_metrics(target_node_id)
+                self.node_items[target_id].update()
+                self.update_metrics(target_id)
         else:
-            # Drop on empty space -> Create New Node & Link
+            # Drop on empty space -> Create New Node
             self.logger.info("Wire dropped on empty space: Creating new node")
-            new_node = Node() # Generates UUID
+            new_node = Node()
             new_node.name = self.graph.generate_new_node_name()
-            new_node.pos_x = pos.x() - 150
-            new_node.pos_y = pos.y() - 100
+            # Position node so port is near cursor
+            new_node.pos_x = pos.x() + 20
+            new_node.pos_y = pos.y() - 50
             
+            # Use global defaults for new node
             settings = SettingsManager()
             provider = settings.value("default_provider", "Ollama")
-            
             if provider == "OpenAI":
                 new_node.config.model = settings.value("openai_model", "gpt-4o")
             elif provider == "Gemini":
                 new_node.config.model = settings.value("gemini_model", "gemini-1.5-flash")
             else:
-                 new_node.config.model = settings.value("ollama_model", "llama3")
+                new_node.config.model = settings.value("ollama_model", "llama3")
 
-            node_cmd = AddNodeCommand(self.graph, new_node)
-            self.command_manager.execute(node_cmd)
+            # Execute Create
+            self.command_manager.execute(AddNodeCommand(self.graph, new_node))
             self.create_node_item(new_node)
             
-            link = Link(source_id=self.dragging_source_id, target_id=new_node.id)
-            link_cmd = AddLinkCommand(self.graph, link)
-            self.command_manager.execute(link_cmd)
+            # Create Link
+            if self.is_reverse_wiring:
+                # Drag from Input to Canvas -> Create Source Node
+                link = Link(source_id=new_node.id, target_id=self.dragging_target_id)
+                target_id_for_ui = self.dragging_target_id
+            else:
+                # Drag from Output to Canvas -> Create Target Node
+                link = Link(source_id=self.dragging_source_id, target_id=new_node.id)
+                target_id_for_ui = new_node.id
+                
+            self.command_manager.execute(AddLinkCommand(self.graph, link))
             self.create_visual_wire(link)
-            
-            self.node_items[new_node.id].update()
+            self.node_items[target_id_for_ui].update()
 
+        # Cleanup Drag State
         self.scene.removeItem(self.temp_wire)
         self.temp_wire = None
         self.dragging_source_id = None
+        self.dragging_target_id = None
+        self.is_reverse_wiring = False
+        self.link_to_remove = None
         self.refresh_visuals()
 
     def create_visual_wire(self, link):

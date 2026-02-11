@@ -1,3 +1,6 @@
+"""
+Error Handler - Centralized exception handling and error reporting.
+"""
 
 import sys
 import traceback
@@ -8,7 +11,19 @@ from PySide6.QtGui import QIcon
 from PySide6.QtCore import Qt
 
 class ErrorDialog(QDialog):
+    """
+    Custom dialog for displaying error messages with optional details (stack trace).
+    """
     def __init__(self, title, message, details=None, parent=None):
+        """
+        Initialize the error dialog.
+        
+        Args:
+            title (str): Dialog title.
+            message (str): User-friendly error message.
+            details (str, optional): Technical details (e.g. stack trace).
+            parent (QWidget, optional): Parent widget.
+        """
         super().__init__(parent)
         self.setWindowTitle(title)
         
@@ -68,6 +83,7 @@ class ErrorDialog(QDialog):
         self.adjustSize()
 
     def toggle_details(self):
+        """Toggle the visibility of the technical details section."""
         visible = self.details_box.isVisible()
         self.details_box.setVisible(not visible)
         self.btn_details.setText("Hide Details" if not visible else "Show Details")
@@ -82,10 +98,17 @@ class ErrorDialog(QDialog):
             self.adjustSize()
 
 class GlobalExceptionHandler:
+    """
+    Catches uncaught exceptions and displays them in a dialog.
+    """
     def __init__(self):
+        """Initialize the global exception handler."""
         self.logger = logging.getLogger("GlobalExceptionHandler")
         
     def handle_exception(self, exc_type, exc_value, exc_traceback):
+        """
+        Handle uncaught exception.
+        """
         if issubclass(exc_type, KeyboardInterrupt):
             sys.__excepthook__(exc_type, exc_value, exc_traceback)
             return
@@ -112,11 +135,18 @@ class GlobalExceptionHandler:
 _handler = GlobalExceptionHandler()
 
 def install_exception_handler():
+    """Install the global exception handler."""
     sys.excepthook = _handler.handle_exception
 
 def show_error(title, message, details=None, parent=None):
     """
     Helper to show centralized error dialog anywhere in the app.
+    
+    Args:
+        title (str): Error title.
+        message (str): Error message.
+        details (str, optional): Technical details.
+        parent (QWidget, optional): Parent widget.
     """
     if details:
         logging.getLogger("ErrorHandler").warning(f"{title}: {message}\nDetails: {details}")

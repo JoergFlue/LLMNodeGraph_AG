@@ -54,7 +54,7 @@ class TabController(QObject):
         Initialize the TabController.
         
         Args:
-            queue_manager: LLMQueueManager instance for tab coordination
+            queue_manager: LLMQueueManager instance for tab coordination.
         """
         super().__init__()
         self.logger = logging.getLogger("TabController")
@@ -73,12 +73,12 @@ class TabController(QObject):
         Create a new tab.
         
         Args:
-            graph: Optional existing graph. If None, creates new empty graph.
-            file_path: Optional file path for the graph.
-            editor_tab: Optional EditorTab widget reference.
+            graph (Optional[Graph]): Optional existing graph. If None, creates new empty graph.
+            file_path (Optional[str]): Optional file path for the graph.
+            editor_tab (Optional[object]): Optional EditorTab widget reference.
             
         Returns:
-            TabInfo for the created tab.
+            TabInfo: Information for the created tab.
         """
         tab_id = str(uuid4())
         
@@ -111,11 +111,11 @@ class TabController(QObject):
         Close a tab.
         
         Args:
-            tab_id: ID of the tab to close.
-            force: If True, close without checking for unsaved changes.
+            tab_id (str): ID of the tab to close.
+            force (bool): If True, close without checking for unsaved changes.
             
         Returns:
-            True if tab was closed, False if cancelled by user.
+            bool: True if tab was closed, False if cancelled by user.
         """
         if tab_id not in self._tabs:
             self.logger.warning(f"Attempted to close non-existent tab {tab_id}")
@@ -152,10 +152,10 @@ class TabController(QObject):
         Get tab information by ID.
         
         Args:
-            tab_id: ID of the tab.
+            tab_id (str): ID of the tab.
             
         Returns:
-            TabInfo if found, None otherwise.
+            Optional[TabInfo]: TabInfo if found, None otherwise.
         """
         return self._tabs.get(tab_id)
     
@@ -164,7 +164,7 @@ class TabController(QObject):
         Get the currently active tab.
         
         Returns:
-            TabInfo of active tab, or None if no tabs exist.
+            Optional[TabInfo]: TabInfo of active tab, or None if no tabs exist.
         """
         if self._active_tab_id:
             return self._tabs.get(self._active_tab_id)
@@ -175,10 +175,10 @@ class TabController(QObject):
         Set the active tab.
         
         Args:
-            tab_id: ID of the tab to activate.
+            tab_id (str): ID of the tab to activate.
             
         Returns:
-            True if successful, False if tab doesn't exist.
+            bool: True if successful, False if tab doesn't exist.
         """
         if tab_id not in self._tabs:
             self.logger.warning(f"Attempted to activate non-existent tab {tab_id}")
@@ -202,7 +202,7 @@ class TabController(QObject):
         Get all tabs.
         
         Returns:
-            List of all TabInfo objects.
+            List[TabInfo]: List of all TabInfo objects.
         """
         return list(self._tabs.values())
     
@@ -211,7 +211,7 @@ class TabController(QObject):
         Get the number of tabs.
         
         Returns:
-            Number of tabs.
+            int: Number of tabs.
         """
         return len(self._tabs)
     
@@ -220,10 +220,10 @@ class TabController(QObject):
         Check if a tab has unsaved changes.
         
         Args:
-            tab_id: ID of the tab.
+            tab_id (str): ID of the tab.
             
         Returns:
-            True if tab has unsaved changes, False otherwise.
+            bool: True if tab has unsaved changes, False otherwise.
         """
         tab_info = self._tabs.get(tab_id)
         if tab_info:
@@ -235,7 +235,7 @@ class TabController(QObject):
         Get all tabs with unsaved changes.
         
         Returns:
-            List of TabInfo objects with unsaved changes.
+            List[TabInfo]: List of TabInfo objects with unsaved changes.
         """
         return [
             tab_info for tab_info in self._tabs.values()
@@ -247,7 +247,7 @@ class TabController(QObject):
         Mark a tab as having unsaved changes.
         
         Args:
-            tab_id: ID of the tab.
+            tab_id (str): ID of the tab.
         """
         tab_info = self._tabs.get(tab_id)
         if tab_info:
@@ -262,7 +262,7 @@ class TabController(QObject):
         Mark a tab as saved (no unsaved changes).
         
         Args:
-            tab_id: ID of the tab.
+            tab_id (str): ID of the tab.
         """
         tab_info = self._tabs.get(tab_id)
         if tab_info:
@@ -277,11 +277,11 @@ class TabController(QObject):
         Get display name for a tab.
         
         Args:
-            tab_id: ID of the tab.
-            include_dirty: Whether to include dirty indicator (*).
+            tab_id (str): ID of the tab.
+            include_dirty (bool): Whether to include dirty indicator (*).
             
         Returns:
-            Display name string, or "Unknown" if tab doesn't exist.
+            str: Display name string, or "Unknown" if tab doesn't exist.
         """
         tab_info = self._tabs.get(tab_id)
         if tab_info:
@@ -293,10 +293,10 @@ class TabController(QObject):
         Close all tabs.
         
         Args:
-            force: If True, close without checking for unsaved changes.
+            force (bool): If True, close without checking for unsaved changes.
             
         Returns:
-            True if all tabs were closed, False if any were cancelled.
+            bool: True if all tabs were closed, False if any were cancelled.
         """
         tab_ids = list(self._tabs.keys())
         
@@ -311,10 +311,10 @@ class TabController(QObject):
         Find a tab by its file path.
         
         Args:
-            file_path: File path to search for.
+            file_path (str): File path to search for.
             
         Returns:
-            TabInfo if found, None otherwise.
+            Optional[TabInfo]: TabInfo if found, None otherwise.
         """
         for tab_info in self._tabs.values():
             if tab_info.graph_controller.file_path == file_path:

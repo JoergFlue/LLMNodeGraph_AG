@@ -90,6 +90,21 @@ AntiGravity follows a sophisticated modular architecture with advanced design pa
   - Emits signals for UI synchronization
   - Fully tested with 37 unit tests
 
+- **`event_bus.py`**: Central application event system
+  - Singleton pattern for app-wide communication
+  - Decouples UI from backend logic
+  - Handles cross-component signals (settings changed, themes)
+
+- **`provider_manager.py`**: Business logic for LLM providers
+  - Centralized provider and model resolution
+  - Heuristics for default provider selection
+  - Decouples node configuration from UI display
+
+- **`llm_providers.py`**: Strategy pattern for LLM execution
+  - Abstract `LLMStrategy` interface
+  - Concrete strategies for OpenAI, Gemini, Ollama, OpenRouter
+  - `ProviderFactory` for dynamic strategy instantiation
+
 ### UI Modules (`ui/`)
 
 - **`main_window.py`**: Multi-document interface orchestration
@@ -107,11 +122,20 @@ AntiGravity follows a sophisticated modular architecture with advanced design pa
   - Context menus and interaction handling
   - Optimized rendering for large graphs
 
-- **`node_item.py`**: Advanced visual node representation
-  - Resizable nodes with drag handles
-  - Interactive text editors with focus management
-  - Visual status overlays and execution feedback
+- **`node_item.py`**: Node UI container (View)
+  - Manages interaction events and focus
+  - Delegates rendering and layout to specialized classes
   - Context menus and settings integration
+
+- **`node_painter.py`**: Specialized rendering logic
+  - High-performance QPainter drawing commands
+  - Theme-aware visual styling
+  - Handles headers, bodies, output fields, and status indicators
+
+- **`node_layout_manager.py`**: Dynamic layout calculations
+  - Manages internal geometry of node components
+  - Handles resizing limits and text field expansion
+  - Pure logic separation from QGraphicsItem
 
 - **`settings_dialog.py`**: Comprehensive configuration interface
   - Multi-tab provider configuration
@@ -125,10 +149,10 @@ AntiGravity follows a sophisticated modular architecture with advanced design pa
 ### Services (`services/`)
 
 - **`worker.py`**: Advanced async LLM integration
+  - Uses `ProviderFactory` and `LLMStrategy` patterns
   - Full async/await implementation with httpx
-  - Support for all major providers with unified interface
-  - Comprehensive error handling and timeout management
-  - Cancellation support for running requests
+  - Support for all major providers through unified interface
+  - Comprehensive error handling and cancellation support
 
 - **`llm_queue_manager.py`**: Sophisticated task management
   - Concurrent request handling with queuing
@@ -468,13 +492,11 @@ The following are acknowledged limitations in the current release:
 
 ## Contributing
 
-Contributions are welcome! Please follow these guidelines:
+Contributions are welcome!
 
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes with clear commit messages
-4. Test thoroughly
-5. Submit a pull request
+Please read [CONTRIBUTING.md](CONTRIBUTING.md) for details on our code of conduct, and the process for submitting pull requests.
+
+For a deep dive into the system design, check out [ARCHITECTURE.md](ARCHITECTURE.md).
 
 ## License
 

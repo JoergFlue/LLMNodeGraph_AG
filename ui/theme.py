@@ -159,6 +159,19 @@ class Sizing:
     SPINNER_WIDTH = 4
     OVERLAY_WIDTH = 120
     OVERLAY_HEIGHT = 80
+    
+    # Layout Metrics
+    HEADER_TITLE_HEIGHT = 36
+    HEADER_TEXT_X = 38
+    HEADER_TEXT_Y = 24
+    STATUS_DOT_X = 15
+    STATUS_DOT_Y = 12
+    STATUS_DOT_SIZE = 12
+    
+    PROVIDER_LABEL_X = 15
+    PROVIDER_LABEL_Y = 50
+    TRACE_LABEL_Y = 68
+
 
 
 class Typography:
@@ -175,6 +188,10 @@ class Typography:
     
     WEIGHT_NORMAL = 400
     WEIGHT_BOLD = 700
+    
+    # Font Families
+    FONT_UI = "Segoe UI"
+    FONT_MONO = "Consolas"
 
 
 class Timing:

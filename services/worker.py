@@ -68,162 +68,27 @@ class LLMWorker(QThread):
 
     async def _async_run(self, logger):
         try:
-            # Determine effective model
-            model = self.config.get("model", "")
-            provider = self.config.get("provider", "Default")
+            from core.provider_manager import ProviderManager
+            from core.llm_providers import ProviderFactory
+            
+            # Determine effective provider using centralized logic
+            config_provider = self.config.get("provider")
+            config_model = self.config.get("model")
+            
+            effective_provider = ProviderManager.resolve_effective_provider(config_provider, config_model)
+            logger.info(f"Resolved provider: {effective_provider}")
+            
+            # Get Strategy
+            strategy = ProviderFactory.get_strategy(effective_provider)
             
             async with httpx.AsyncClient(timeout=120.0) as client:
-                # Explicit Provider Override
-                if provider == "OpenAI":
-                    await self._call_openai(client, logger)
-                elif provider == "Gemini":
-                    await self._call_gemini(client, logger)
-                elif provider == "OpenRouter":
-                    await self._call_openrouter(client, logger)
-                elif provider == "Ollama":
-                    await self._call_ollama(client, logger)
-                else:
-                    # Fallback to heuristic (Default)
-                    if model.startswith("gpt") or model.startswith("o1"):
-                         await self._call_openai(client, logger)
-                    elif model.startswith("gemini"):
-                         await self._call_gemini(client, logger)
-                    else:
-                         # Default to Ollama for everything else
-                         await self._call_ollama(client, logger)
+                result = await strategy.generate(client, self.prompt, self.config, self.settings, logger)
+                
+                if self.is_cancelled: return
+                self.finished.emit(self.node_id, result)
+
         except asyncio.CancelledError:
             raise
         except Exception as e:
             # Re-raise to be handled in run()
             raise e
-
-    async def _call_ollama(self, client: httpx.AsyncClient, logger):
-        host = self.settings.value("ollama_host", "localhost")
-        port = self.settings.value("ollama_port", 11434)
-        
-        # Clean host
-        host = host.replace("http://", "").replace("https://", "").rstrip("/")
-        base_url = f"http://{host}:{port}"
-        url = f"{base_url}/api/generate"
-        
-        model = self.config.get("model", self.settings.value("ollama_model", "llama3"))
-        
-        payload = {
-            "model": model,
-            "prompt": self.prompt,
-            "stream": False 
-        }
-        
-        try:
-            response = await client.post(url, json=payload)
-            response.raise_for_status()
-            data = response.json()
-            result = data.get("response", "")
-            
-            if self.is_cancelled: return
-            logger.info(f"Ollama response received ({len(result)} chars)")
-            self.finished.emit(self.node_id, result)
-        except httpx.HTTPError as e:
-            msg = str(e)
-            if response is not None and response.status_code == 404:
-                msg += f"\nCheck if model '{model}' is pulled in Ollama."
-            raise Exception(f"Ollama connection failed to {base_url}: {msg}")
-
-    async def _call_openai(self, client: httpx.AsyncClient, logger):
-        api_key = self.settings.value("openai_key")
-        if not api_key:
-            api_key = os.environ.get("OPENAI_API_KEY")
-            
-        if not api_key:
-            raise Exception("OpenAI API Key not found in Settings or Environment (OPENAI_API_KEY)")
-            
-        url = "https://api.openai.com/v1/chat/completions"
-        headers = {
-            "Authorization": f"Bearer {api_key}",
-            "Content-Type": "application/json"
-        }
-        
-        model = self.config.get("model", self.settings.value("openai_model", "gpt-4o"))
-        
-        payload = {
-            "model": model,
-            "messages": [{"role": "user", "content": self.prompt}],
-        }
-        
-        try:
-            response = await client.post(url, headers=headers, json=payload)
-            response.raise_for_status()
-            data = response.json()
-            result = data['choices'][0]['message']['content']
-            
-            if self.is_cancelled: return
-            logger.info(f"OpenAI response received ({len(result)} chars)")
-            self.finished.emit(self.node_id, result)
-        except httpx.HTTPError as e:
-             raise Exception(f"OpenAI API failed: {e}")
-
-    async def _call_gemini(self, client: httpx.AsyncClient, logger):
-        api_key = self.settings.value("gemini_key")
-        if not api_key:
-            raise Exception("Google Gemini API Key not configured in Settings")
-            
-        model_name = self.config.get("model", self.settings.value("gemini_model", "gemini-1.5-flash"))
-        
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={api_key}"
-        
-        headers = {"Content-Type": "application/json"}
-        payload = {
-            "contents": [{
-                "parts": [{"text": self.prompt}]
-            }]
-        }
-        
-        try:
-            response = await client.post(url, headers=headers, json=payload)
-            response.raise_for_status()
-            data = response.json()
-            try:
-                result = data['candidates'][0]['content']['parts'][0]['text']
-                
-                if self.is_cancelled: return
-                logger.info(f"Gemini response received ({len(result)} chars)")
-                self.finished.emit(self.node_id, result)
-            except (KeyError, IndexError):
-                error_msg = json.dumps(data) if data else "Empty response"
-                raise Exception(f"Unexpected Gemini response: {error_msg}")
-                
-        except httpx.HTTPError as e:
-             raise Exception(f"Gemini API failed: {e}")
-
-    async def _call_openrouter(self, client: httpx.AsyncClient, logger):
-        api_key = self.settings.value("openrouter_key")
-        if not api_key:
-            raise Exception("OpenRouter API Key not configured in Settings")
-            
-        model = self.config.get("model", self.settings.value("openrouter_model", "openai/gpt-3.5-turbo"))
-        
-        url = "https://openrouter.ai/api/v1/chat/completions"
-        
-        headers = {
-            "Authorization": f"Bearer {api_key}",
-            "HTTP-Referer": "https://github.com/JoergFlue/LLMNodeGraph_AG",
-            "X-Title": "AntiGravity",
-            "Content-Type": "application/json"
-        }
-        
-        payload = {
-            "model": model,
-            "messages": [{"role": "user", "content": self.prompt}],
-        }
-        
-        try:
-            response = await client.post(url, headers=headers, json=payload)
-            response.raise_for_status()
-            data = response.json()
-            result = data['choices'][0]['message']['content']
-            
-            if self.is_cancelled: return
-            logger.info(f"OpenRouter response received ({len(result)} chars)")
-            self.finished.emit(self.node_id, result)
-        except httpx.HTTPError as e:
-             raise Exception(f"OpenRouter API failed: {e}")

@@ -406,6 +406,33 @@ class SettingsDialog(QDialog):
         
         self._start_fetch_worker(url, headers, parser, self.combo_openrouter_model, auto)
 
+    def _start_fetch_worker(self, url, headers, parser, combo_widget, auto):
+        worker = FetchModelsWorker(url, headers, parser)
+        self._active_workers.append(worker)
+        
+        worker.finished.connect(lambda models: self._on_fetch_success(models, combo_widget, auto))
+        worker.error.connect(lambda err: self._on_fetch_error(err, auto))
+        
+        # Cleanup
+        worker.finished.connect(lambda: self._cleanup_worker(worker))
+        worker.error.connect(lambda: self._cleanup_worker(worker))
+        
+        worker.start()
+        if not auto: self.setCursor(Qt.WaitCursor)
+
+    def _cleanup_worker(self, worker):
+        if worker in self._active_workers:
+            self._active_workers.remove(worker)
+            worker.deleteLater()
+
+    def _on_fetch_success(self, models, combo_widget, auto):
+        if not auto: self.unsetCursor()
+        current = combo_widget.currentText()
+        combo_widget.clear()
+        combo_widget.addItems(models)
+        combo_widget.setEditText(current)
+        if not auto: QMessageBox.information(self, "Success", f"Fetched {len(models)} models.")
+
     def _on_fetch_error(self, error_msg, auto=False):
         if not auto:
             self.unsetCursor()

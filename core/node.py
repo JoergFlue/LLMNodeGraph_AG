@@ -1,3 +1,6 @@
+"""
+Node - Data structures for nodes and links.
+"""
 
 import uuid
 from dataclasses import dataclass, field
@@ -5,6 +8,15 @@ from typing import List, Optional, Dict
 
 @dataclass
 class NodeConfig:
+    """
+    Configuration for an LLM Node.
+    
+    Attributes:
+        model (str): The LLM model name (e.g., "gpt-4o").
+        provider (str): The LLM provider (e.g., "OpenAI", "Ollama").
+        max_tokens (int): Maximum tokens for context + generation.
+        trace_depth (int): How many levels of history to include.
+    """
     model: str = "gpt-4o"
     provider: str = "Default"  # Default, Ollama, OpenAI, Gemini
     max_tokens: int = 16000
@@ -12,12 +24,38 @@ class NodeConfig:
 
 @dataclass
 class Link:
+    """
+    Represents a connection between two nodes.
+    
+    Attributes:
+        source_id (str): ID of the source node (output).
+        target_id (str): ID of the target node (input).
+        id (str): Unique identifier for the link.
+    """
     source_id: str
     target_id: str
     id: str = field(default_factory=lambda: str(uuid.uuid4()))
 
 @dataclass
 class Node:
+    """
+    Represents a Node in the flow graph.
+    
+    Attributes:
+        id (str): Unique identifier.
+        config (NodeConfig): LLM configuration.
+        prompt (str): User prompt text.
+        cached_output (str): Last generated output.
+        is_dirty (bool): Whether the node needs re-computation.
+        name (str): Display name.
+        input_links (List[str]): List of incoming Link IDs.
+        pos_x (float): X position in UI.
+        pos_y (float): Y position in UI.
+        width (float): Node width.
+        height (float): Node height.
+        prompt_height (int): Height of prompt text area.
+        output_height (int): Height of output text area.
+    """
     id: str = field(default_factory=lambda: str(uuid.uuid4()))
     config: NodeConfig = field(default_factory=NodeConfig)
     prompt: str = ""
@@ -41,6 +79,12 @@ class Node:
     output_height: int = 160
 
     def to_dict(self):
+        """
+        Serialize the node to a dictionary.
+        
+        Returns:
+            Dict[str, Any]: Dictionary representation of the node.
+        """
         return {
             "id": self.id,
             "type": "LLM_Node",
@@ -62,6 +106,15 @@ class Node:
 
     @classmethod
     def from_dict(cls, data):
+        """
+        Deserialize a node from a dictionary.
+        
+        Args:
+            data (Dict[str, Any]): Dictionary containing node data.
+            
+        Returns:
+            Node: A new Node instance.
+        """
         size = data.get("size", [300.0, 450.0])
         text_heights = data.get("text_heights", [100, 160])
         
