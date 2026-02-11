@@ -26,9 +26,18 @@ We welcome contributions! Please follow these guidelines to ensure code quality 
 ## Pull Request Process
 
 1.  Create a feature branch.
-2.  Ensure tests pass (if any).
+2.  **Ensure tests pass**: 
+    - Run unit tests: `uv run pytest tests/test_graph_controller.py` (etc.)
+    - Run integration tests: `uv run pytest tests/test_api_integration.py`
 3.  Ensure docstring coverage is maintained (>90%).
 4.  Submit a PR with a clear description of changes.
+
+## Testing Guidelines
+
+- **Unit Tests**: Focus on individual class logic (e.g., `Graph`, `CommandManager`).
+- **Integration Tests**: Use the `AntiGravityAPI` in `core/api.py` to verify end-to-end workflows and UI synchronization.
+- **Fixtures**: Use shared fixtures from `tests/conftest.py`.
+- **Mocks**: Mock external services (LLM APIs, file systems where appropriate) to ensure tests are fast and reliable.
 
 ## Architecture
 

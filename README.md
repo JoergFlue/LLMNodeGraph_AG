@@ -100,6 +100,11 @@ AntiGravity follows a sophisticated modular architecture with advanced design pa
   - Heuristics for default provider selection
   - Decouples node configuration from UI display
 
+- **`api.py`**: High-level Developer API
+  - Facade class for external automation and testing
+  - Provides simplified access to node, connection, and scene operations
+  - Essential for robust integration testing
+
 - **`llm_providers.py`**: Strategy pattern for LLM execution
   - Abstract `LLMStrategy` interface
   - Concrete strategies for OpenAI, Gemini, Ollama, OpenRouter
@@ -402,7 +407,8 @@ AntiGravity/
 │   ├── conftest.py         # Shared pytest fixtures
 │   ├── test_graph_controller.py    # GraphController tests (33 tests)
 │   ├── test_tab_controller.py      # TabController tests (37 tests)
-│   ├── test_main_window_integration.py # Integration tests (18 tests)
+│   ├── test_main_window_integration.py # UI integration tests (18 tests)
+│   ├── test_api_integration.py     # High-level API integration tests
 │   └── test_ui_functionality.py    # UI component tests
 ├── main.py                 # Application entry point
 ├── pyproject.toml          # Modern Python project configuration
@@ -444,6 +450,26 @@ AntiGravity/
 2. **Style Application**: Update component stylesheets
 3. **Settings Integration**: Add theme selection to settings dialog
 4. **Persistence**: Store theme preferences in settings manager
+
+### Testing and Automation
+
+The system includes a dedicated `AntiGravityAPI` in `core/api.py` designed for integration testing and external automation.
+
+#### Running Tests
+```bash
+# Run all tests
+uv run pytest
+
+# Run specific integration tests
+uv run pytest tests/test_api_integration.py
+```
+
+#### Writing Integration Tests
+Integration tests should use the `AntiGravityAPI` to interact with the application state. See `tests/test_api_integration.py` for examples of:
+- Building complex graphs programmatically
+- Verifying UI state synchronization
+- Testing file operations and persistence
+- Validating LLM execution flows
 
 ## Known Limitations
 
